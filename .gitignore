@@ -1,0 +1,14 @@
+# Build and packaging artifacts
+dist/
+*.shell-extension.zip
+*.zip
+
+# Logs and temporary files
+*.log
+*.tmp
+*~
+
+# Editor and OS noise
+.DS_Store
+.idea/
+.vscode/
