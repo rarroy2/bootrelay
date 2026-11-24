@@ -1,0 +1,803 @@
+#!/usr/bin/env bash
+# SPDX-License-Identifier: MIT
+# Copyright (c) 2026 Raúl Arroyo (rarroy2)
+#
+# boot-to-windows - part of hello-depression
+#
+# Configures the next boot to Windows and, unless --no-reboot is given,
+# reboots immediately.
+#
+#   UEFI: writes BootNext with efibootmgr, preferring the entry whose device
+#         path points to \EFI\Microsoft\Boot\bootmgfw.efi over stale entries
+#         that point to a Linux shim.
+#   GRUB: fallback for non-UEFI systems or when BootNext cannot be written.
+#         Uses grub2-reboot/grub-reboot (requires GRUB_DEFAULT=saved).
+#
+# Exit codes:
+#   0  success
+#   1  usage or generic error
+#   2  permission / escalation error
+#   3  no Windows boot entry found
+#   4  failed to write or verify the boot selection
+#   5  unsupported system or configuration
+#   6  EFI variables are read-only
+
+set -euo pipefail
+
+export LC_ALL=C
+export PATH=/usr/sbin:/usr/bin:/sbin:/bin
+umask 022
+
+readonly PROG_NAME='boot-to-windows'
+readonly VERSION='0.1.0'
+readonly EFIVARS='/sys/firmware/efi/efivars'
+
+DRY_RUN=0
+DETECT=0
+LIST_ALL=0
+DO_REBOOT=1
+METHOD='auto'
+FORCED_ENTRY=''
+QUIET=0
+ESCALATE='auto'
+
+say() { (( QUIET )) || printf '%s\n' "$*"; }
+warn() { (( QUIET )) || printf 'warning: %s\n' "$*" >&2; }
+err() { printf '%s: %s\n' "$PROG_NAME" "$*" >&2; }
+die() {
+    local code=$1
+    shift
+    err "$*"
+    exit "$code"
+}
+
+# Print with a format string, honouring --quiet.
+sayf() { (( QUIET )) || printf "$@"; }
+
+usage() {
+    cat <<'EOF'
+Usage: boot-to-windows [OPTIONS]
+
+Configure the next boot to Windows and reboot (default).
+
+Options:
+  --detect            Detect Windows entries and exit; changes nothing
+  --list              List all UEFI entries and GRUB Windows entries
+  --dry-run           Show what would be done without writing anything
+  --no-reboot         Set the next boot entry but do not reboot
+  --method=METHOD     auto (default), uefi or grub
+  --entry=XXXX        Force a specific UEFI entry (four hex digits)
+  --escalate=HOW      auto (default), pkexec, sudo or none
+  --quiet, -q         Only print errors
+  --version, -V       Print version and exit
+  --help, -h          Print this help and exit
+
+Exit codes:
+  0 success, 1 usage, 2 permission, 3 no Windows entry,
+  4 write/verify failure, 5 unsupported system, 6 efivarfs read-only
+
+Examples:
+  boot-to-windows --detect
+  sudo boot-to-windows --dry-run
+  sudo boot-to-windows --no-reboot
+  sudo boot-to-windows --entry=0005
+EOF
+}
+
+log_syslog() {
+    if command -v logger >/dev/null 2>&1; then
+        logger -t "$PROG_NAME" -- "$*" 2>/dev/null || true
+    fi
+}
+
+ORIGINAL_ARGS=("$@")
+SELF=$(readlink -f -- "${BASH_SOURCE[0]}")
+readonly SELF
+
+while (($#)); do
+    case "$1" in
+        --dry-run) DRY_RUN=1 ;;
+        --detect) DETECT=1 ;;
+        --list) LIST_ALL=1 ;;
+        --no-reboot) DO_REBOOT=0 ;;
+        --reboot) DO_REBOOT=1 ;;
+        --method=*) METHOD=${1#*=} ;;
+        --method)
+            shift
+            (($#)) || die 1 '--method requires a value'
+            METHOD=$1
+            ;;
+        --entry=*) FORCED_ENTRY=${1#*=} ;;
+        --entry)
+            shift
+            (($#)) || die 1 '--entry requires a value'
+            FORCED_ENTRY=$1
+            ;;
+        --escalate=*) ESCALATE=${1#*=} ;;
+        --escalate)
+            shift
+            (($#)) || die 1 '--escalate requires a value'
+            ESCALATE=$1
+            ;;
+        --quiet | -q) QUIET=1 ;;
+        --verbose | -v) QUIET=0 ;;
+        --version | -V)
+            printf '%s %s\n' "$PROG_NAME" "$VERSION"
+            exit 0
+            ;;
+        --help | -h)
+            usage
+            exit 0
+            ;;
+        --)
+            shift
+            break
+            ;;
+        -*)
+            die 1 "unknown option: $1 (try --help)"
+            ;;
+        *)
+            die 1 "unexpected argument: $1 (try --help)"
+            ;;
+    esac
+    shift
+done
+
+case "$METHOD" in
+    auto | uefi | grub) ;;
+    *) die 1 "invalid --method value: $METHOD (auto, uefi or grub)" ;;
+esac
+
+case "$ESCALATE" in
+    auto | pkexec | sudo | none) ;;
+    *) die 1 "invalid --escalate value: $ESCALATE (auto, pkexec, sudo or none)" ;;
+esac
+
+if [[ -n $FORCED_ENTRY ]]; then
+    [[ $FORCED_ENTRY =~ ^[0-9A-Fa-f]{4}$ ]] ||
+        die 1 "--entry must be four hexadecimal digits (for example 0005)"
+    FORCED_ENTRY=${FORCED_ENTRY^^}
+fi
+
+is_root() { [[ ${EUID:-$(id -u)} -eq 0 ]]; }
+
+needs_root() {
+    if (( DETECT || LIST_ALL || DRY_RUN )); then
+        return 1
+    fi
+    return 0
+}
+
+# ---------------------------------------------------------------------------
+# Privilege escalation
+# ---------------------------------------------------------------------------
+
+if needs_root && ! is_root; then
+    case "$ESCALATE" in
+        none)
+            die 2 'root privileges are required; run with sudo or pkexec'
+            ;;
+        pkexec | auto)
+            if command -v pkexec >/dev/null 2>&1; then
+                exec pkexec "$SELF" "${ORIGINAL_ARGS[@]}"
+            fi
+            if [[ $ESCALATE == pkexec ]]; then
+                die 2 'pkexec was not found'
+            fi
+            ;;
+    esac
+
+    if command -v sudo >/dev/null 2>&1; then
+        if sudo -n -- "$SELF" "${ORIGINAL_ARGS[@]}"; then
+            exit 0
+        else
+            rc=$?
+        fi
+        if (( rc == 1 )); then
+            die 2 'sudo failed (password required or command not permitted)'
+        fi
+        exit "$rc"
+    fi
+
+    die 2 'no privilege escalation tool available (install sudo or polkit)'
+fi
+
+# ---------------------------------------------------------------------------
+# UEFI detection
+# ---------------------------------------------------------------------------
+
+declare -a U_NUM=()
+declare -a U_LABEL=()
+declare -a U_PATH=()
+declare -a U_SCORE=()
+declare -a U_ACTIVE=()
+
+efi_available() { [[ -d /sys/firmware/efi ]]; }
+
+# Collect all UEFI boot entries. Entries that look like Windows get a score:
+#   100  device path contains bootmgfw.efi (the real Windows loader)
+#    50  label is exactly "Windows Boot Manager"
+#    30  label contains "windows"
+#   -80  device path points to a shim/GRUB/Linux loader (stale entry)
+#     5  entry is active
+# Candidates are entries with score > 0.
+collect_uefi() {
+    U_NUM=()
+    U_LABEL=()
+    U_PATH=()
+    U_SCORE=()
+    U_ACTIVE=()
+
+    command -v efibootmgr >/dev/null 2>&1 || return 1
+    efi_available || return 1
+
+    local output line num active rest label path score low_label low_path
+    if ! output=$(efibootmgr -v 2>/dev/null); then
+        return 1
+    fi
+
+    while IFS= read -r line; do
+        if [[ ! $line =~ ^Boot([0-9A-Fa-f]{4})(\*)?[[:space:]]+(.*)$ ]]; then
+            continue
+        fi
+
+        num=${BASH_REMATCH[1]^^}
+        active=${BASH_REMATCH[2]}
+        rest=${BASH_REMATCH[3]}
+
+        if [[ $rest == *$'\t'* ]]; then
+            label=${rest%%$'\t'*}
+            path=${rest#*$'\t'}
+        else
+            label=$rest
+            path=''
+        fi
+
+        low_label=${label,,}
+        low_path=${path,,}
+        score=0
+
+        if [[ $low_path == *bootmgfw.efi* ]]; then
+            score=$((score + 100))
+        fi
+        if [[ $low_label == 'windows boot manager' ]]; then
+            score=$((score + 50))
+        fi
+        if [[ $low_label == *windows* ]]; then
+            score=$((score + 30))
+        fi
+        if [[ $low_path == *shim* || $low_path == *grub*.efi || $low_path == *fedora* ]]; then
+            score=$((score - 80))
+        fi
+        if [[ -n $active ]]; then
+            score=$((score + 5))
+        fi
+
+        U_NUM+=("$num")
+        U_LABEL+=("$label")
+        U_PATH+=("$path")
+        U_SCORE+=("$score")
+        U_ACTIVE+=("${active:+yes}")
+    done <<<"$output"
+
+    ((${#U_NUM[@]}))
+}
+
+CHOSEN_KIND=''
+CHOSEN_NUM=''
+CHOSEN_LABEL=''
+CHOSEN_PATH=''
+CHOSEN_SCORE=-999
+CHOSEN_TITLE=''
+
+# Pick the best Windows entry. Honours --entry.
+pick_uefi() {
+    ((${#U_NUM[@]})) || return 1
+
+    if [[ -n $FORCED_ENTRY ]]; then
+        local i
+        for i in "${!U_NUM[@]}"; do
+            if [[ ${U_NUM[i]} == "$FORCED_ENTRY" ]]; then
+                CHOSEN_KIND='uefi'
+                CHOSEN_NUM=${U_NUM[i]}
+                CHOSEN_LABEL=${U_LABEL[i]}
+                CHOSEN_PATH=${U_PATH[i]}
+                CHOSEN_SCORE=${U_SCORE[i]}
+                return 0
+            fi
+        done
+        err "Boot${FORCED_ENTRY} was not found; run --list to see the available entries"
+        return 1
+    fi
+
+    local i best=-1 ties=0
+    for i in "${!U_NUM[@]}"; do
+        if (( U_SCORE[i] <= 0 )); then
+            continue
+        fi
+        if (( best < 0 || U_SCORE[i] > U_SCORE[best] )); then
+            best=$i
+            ties=0
+        elif (( U_SCORE[i] == U_SCORE[best] )); then
+            ties=$((ties + 1))
+        fi
+    done
+
+    if (( best < 0 )); then
+        return 1
+    fi
+
+    CHOSEN_KIND='uefi'
+    CHOSEN_NUM=${U_NUM[best]}
+    CHOSEN_LABEL=${U_LABEL[best]}
+    CHOSEN_PATH=${U_PATH[best]}
+    CHOSEN_SCORE=${U_SCORE[best]}
+
+    if (( ties > 0 )); then
+        warn "several Windows entries have the same score; using Boot${CHOSEN_NUM} (override with --entry=XXXX)"
+    fi
+    return 0
+}
+
+# ---------------------------------------------------------------------------
+# GRUB fallback
+# ---------------------------------------------------------------------------
+
+declare -a GRUB_CFGS=()
+declare -a G_TITLES=()
+
+# Colon-separated override, mainly for tests and unusual layouts.
+GRUB_CFG_PATHS=${BOOT_TO_WINDOWS_GRUB_CFG:-/boot/grub2/grub.cfg:/boot/grub/grub.cfg:/boot/efi/EFI/fedora/grub.cfg}
+
+array_contains() {
+    local needle=$1 item
+    shift
+    for item in "$@"; do
+        if [[ $item == "$needle" ]]; then
+            return 0
+        fi
+    done
+    return 1
+}
+
+# Add a title to G_TITLES unless it is already present.
+add_grub_title() {
+    if ((${#G_TITLES[@]})); then
+        if array_contains "$1" "${G_TITLES[@]}"; then
+            return 0
+        fi
+    fi
+    G_TITLES+=("$1")
+}
+
+collect_grub() {
+    GRUB_CFGS=()
+    G_TITLES=()
+
+    local f line title depth opens closes i full
+    local -a stack=()
+    local -a grub_paths=()
+    IFS=':' read -r -a grub_paths <<<"$GRUB_CFG_PATHS"
+
+    local re_submenu="^[[:space:]]*submenu[[:space:]]+'([^']*)'"
+    local re_menuentry="^[[:space:]]*menuentry[[:space:]]+'([^']*)'"
+    local re_submenu_dq='^[[:space:]]*submenu[[:space:]]+"([^"]*)"'
+    local re_menuentry_dq='^[[:space:]]*menuentry[[:space:]]+"([^"]*)"'
+
+    for f in "${grub_paths[@]}"; do
+        [[ -r $f ]] || continue
+        GRUB_CFGS+=("$f")
+
+        depth=0
+        stack=()
+
+        while IFS= read -r line; do
+            title=''
+            if [[ $line =~ $re_submenu ]]; then
+                title=${BASH_REMATCH[1]}
+                stack[depth]=$title
+            elif [[ $line =~ $re_menuentry ]]; then
+                title=${BASH_REMATCH[1]}
+                if [[ ${title,,} == *windows* ]]; then
+                    full=''
+                    for ((i = 0; i < depth; i++)); do
+                        if [[ -n ${stack[i]:-} ]]; then
+                            full+="${stack[i]}>"
+                        fi
+                    done
+                    full+=$title
+                    add_grub_title "$full"
+                fi
+            elif [[ $line =~ $re_submenu_dq ]]; then
+                title=${BASH_REMATCH[1]}
+                stack[depth]=$title
+            elif [[ $line =~ $re_menuentry_dq ]]; then
+                title=${BASH_REMATCH[1]}
+                if [[ ${title,,} == *windows* ]]; then
+                    full=''
+                    for ((i = 0; i < depth; i++)); do
+                        if [[ -n ${stack[i]:-} ]]; then
+                            full+="${stack[i]}>"
+                        fi
+                    done
+                    full+=$title
+                    add_grub_title "$full"
+                fi
+            fi
+
+            opens=$(printf '%s' "$line" | tr -cd '{' | wc -c)
+            closes=$(printf '%s' "$line" | tr -cd '}' | wc -c)
+            depth=$((depth + opens - closes))
+            if (( depth < 0 )); then
+                depth=0
+            fi
+        done <"$f"
+    done
+
+    ((${#G_TITLES[@]}))
+}
+
+pick_grub() {
+    ((${#G_TITLES[@]})) || return 1
+
+    local title
+    for title in "${G_TITLES[@]}"; do
+        if [[ ${title,,} == *'windows boot manager'* ]]; then
+            CHOSEN_KIND='grub'
+            CHOSEN_TITLE=$title
+            return 0
+        fi
+    done
+
+    CHOSEN_KIND='grub'
+    CHOSEN_TITLE=${G_TITLES[0]}
+    return 0
+}
+
+find_grub_reboot() {
+    if command -v grub2-reboot >/dev/null 2>&1; then
+        printf 'grub2-reboot'
+        return 0
+    fi
+    if command -v grub-reboot >/dev/null 2>&1; then
+        printf 'grub-reboot'
+        return 0
+    fi
+    return 1
+}
+
+find_grub_editenv() {
+    if command -v grub2-editenv >/dev/null 2>&1; then
+        printf 'grub2-editenv'
+        return 0
+    fi
+    if command -v grub-editenv >/dev/null 2>&1; then
+        printf 'grub-editenv'
+        return 0
+    fi
+    return 1
+}
+
+grub_default_is_saved() {
+    local value=''
+    if [[ -r /etc/default/grub ]]; then
+        value=$(sed -n 's/^[[:space:]]*GRUB_DEFAULT=//p' /etc/default/grub | tail -n1)
+        value=${value%\"}
+        value=${value#\"}
+        value=${value%\'}
+        value=${value#\'}
+    fi
+
+    if [[ -z $value ]]; then
+        warn 'could not determine GRUB_DEFAULT; assuming GRUB_DEFAULT=saved'
+        return 0
+    fi
+
+    if [[ $value != 'saved' ]]; then
+        err "GRUB_DEFAULT is '$value' but the one-shot entry requires GRUB_DEFAULT=saved"
+        return 1
+    fi
+
+    return 0
+}
+
+# ---------------------------------------------------------------------------
+# Apply
+# ---------------------------------------------------------------------------
+
+apply_uefi() {
+    local output next
+
+    say "Setting next boot to Boot${CHOSEN_NUM} (${CHOSEN_LABEL})"
+
+    if ! output=$(efibootmgr -n "$CHOSEN_NUM" 2>&1); then
+        err "efibootmgr failed: ${output:-unknown error}"
+        return 1
+    fi
+
+    next=$(efibootmgr 2>/dev/null |
+        sed -n 's/^BootNext:[[:space:]]*//p' |
+        tr -d '[:space:]' |
+        tr '[:lower:]' '[:upper:]')
+
+    if [[ $next != "$CHOSEN_NUM" ]]; then
+        err "verification failed: BootNext is '${next:-unset}', expected '$CHOSEN_NUM'"
+        return 1
+    fi
+
+    log_syslog "BootNext set to $CHOSEN_NUM ($CHOSEN_LABEL)"
+    say "Verified: BootNext=${CHOSEN_NUM}"
+    return 0
+}
+
+apply_grub() {
+    local cmd editenv output next
+
+    grub_default_is_saved || return 1
+
+    if ! cmd=$(find_grub_reboot); then
+        err 'grub2-reboot/grub-reboot was not found'
+        return 1
+    fi
+
+    say "Setting one-shot GRUB entry: ${CHOSEN_TITLE}"
+
+    if ! output=$("$cmd" -- "$CHOSEN_TITLE" 2>&1); then
+        err "$cmd failed: ${output:-unknown error}"
+        return 1
+    fi
+
+    if ! editenv=$(find_grub_editenv); then
+        err 'grub2-editenv was not found; cannot verify the GRUB entry'
+        return 1
+    fi
+
+    next=$("$editenv" list 2>/dev/null | sed -n 's/^next_entry=//p' | tail -n1)
+
+    if [[ $next != "$CHOSEN_TITLE" ]]; then
+        err "verification failed: next_entry is '${next:-unset}', expected '$CHOSEN_TITLE'"
+        return 1
+    fi
+
+    log_syslog "GRUB next_entry set to $CHOSEN_TITLE"
+    say "Verified: next_entry=${CHOSEN_TITLE}"
+    return 0
+}
+
+# ---------------------------------------------------------------------------
+# Reporting
+# ---------------------------------------------------------------------------
+
+show_detection() {
+    local found=0 i title
+
+    if efi_available; then
+        say 'UEFI: yes'
+    else
+        say 'UEFI: no'
+    fi
+
+    if collect_uefi; then
+        local candidates=0
+        for i in "${!U_NUM[@]}"; do
+            if (( U_SCORE[i] > 0 )); then
+                candidates=$((candidates + 1))
+            fi
+        done
+
+        if (( candidates > 0 )); then
+            found=1
+            say ''
+            say 'UEFI Windows candidates:'
+            for i in "${!U_NUM[@]}"; do
+                if (( U_SCORE[i] <= 0 )); then
+                    continue
+                fi
+                sayf '  Boot%s  score=%4d  %s\n' "${U_NUM[i]}" "${U_SCORE[i]}" "${U_LABEL[i]}"
+                if [[ -n ${U_PATH[i]} ]]; then
+                    sayf '         %s\n' "${U_PATH[i]}"
+                fi
+            done
+
+            if pick_uefi; then
+                say ''
+                say "Selected: Boot${CHOSEN_NUM} (${CHOSEN_LABEL})"
+            elif [[ -n $FORCED_ENTRY ]]; then
+                return 1
+            fi
+        else
+            say 'UEFI Windows candidates: none'
+        fi
+    else
+        say 'UEFI Windows candidates: none (efibootmgr unavailable or not UEFI)'
+    fi
+
+    if collect_grub; then
+        found=1
+        say ''
+        say 'GRUB Windows entries:'
+        for title in "${G_TITLES[@]}"; do
+            sayf '  %s\n' "$title"
+        done
+        if pick_grub; then
+            say ''
+            say "Selected GRUB entry: ${CHOSEN_TITLE}"
+        fi
+    elif (( !found )); then
+        say ''
+        say 'GRUB Windows entries: none found (grub.cfg missing, unreadable or without Windows)'
+    fi
+
+    if (( !found )); then
+        err 'no Windows boot entry was detected'
+        return 3
+    fi
+
+    return 0
+}
+
+show_list() {
+    local i found=0 title
+
+    if collect_uefi; then
+        found=1
+        say 'UEFI boot entries:'
+        for i in "${!U_NUM[@]}"; do
+            sayf '  Boot%s%s  score=%4d  %s\n' \
+                "${U_NUM[i]}" \
+                "${U_ACTIVE[i]:+ (active)}" \
+                "${U_SCORE[i]}" \
+                "${U_LABEL[i]}"
+            if [[ -n ${U_PATH[i]} ]]; then
+                sayf '         %s\n' "${U_PATH[i]}"
+            fi
+        done
+    else
+        say 'UEFI boot entries: none (efibootmgr unavailable or not UEFI)'
+    fi
+
+    if collect_grub; then
+        found=1
+        say ''
+        say "GRUB Windows entries (from ${GRUB_CFGS[*]}):"
+        for title in "${G_TITLES[@]}"; do
+            sayf '  %s\n' "$title"
+        done
+    fi
+
+    if (( !found )); then
+        err 'no boot entries could be read'
+        return 3
+    fi
+
+    return 0
+}
+
+plan_only() {
+    local have_primary=0 have_fallback=0
+
+    if [[ $METHOD == auto || $METHOD == uefi ]]; then
+        if collect_uefi && pick_uefi; then
+            have_primary=1
+            say "Would set BootNext to Boot${CHOSEN_NUM} (${CHOSEN_LABEL})"
+            say "Would run: efibootmgr -n ${CHOSEN_NUM}"
+            say "Would verify: BootNext == ${CHOSEN_NUM}"
+        elif [[ $METHOD == uefi ]]; then
+            die 3 'no Windows entry was found in efibootmgr'
+        fi
+    fi
+
+    if [[ $METHOD == auto || $METHOD == grub ]]; then
+        if collect_grub && pick_grub; then
+            have_fallback=1
+            if (( have_primary )); then
+                sayf 'Fallback if the UEFI write fails: %s -- %q\n' \
+                    "$(find_grub_reboot 2>/dev/null || printf 'grub2-reboot')" "$CHOSEN_TITLE"
+            else
+                say "Would set the one-shot GRUB entry: ${CHOSEN_TITLE}"
+                sayf 'Would run: %s -- %q\n' \
+                    "$(find_grub_reboot 2>/dev/null || printf 'grub2-reboot')" "$CHOSEN_TITLE"
+                say "Would verify: next_entry == ${CHOSEN_TITLE}"
+            fi
+        elif [[ $METHOD == grub ]]; then
+            die 3 'no Windows entry was found in grub.cfg'
+        fi
+    fi
+
+    if (( !have_primary && !have_fallback )); then
+        die 3 'no Windows boot entry was found (UEFI or GRUB)'
+    fi
+
+    if (( DO_REBOOT )); then
+        say 'Would run: systemctl reboot'
+    else
+        say 'Would not reboot (--no-reboot)'
+    fi
+
+    return 0
+}
+
+# ---------------------------------------------------------------------------
+# Main
+# ---------------------------------------------------------------------------
+
+main() {
+    if (( DETECT )); then
+        show_detection
+        return $?
+    fi
+
+    if (( LIST_ALL )); then
+        show_list
+        return $?
+    fi
+
+    if (( DRY_RUN )); then
+        plan_only
+        return $?
+    fi
+
+    local uefi_allowed=1
+    if [[ $METHOD == grub ]]; then
+        uefi_allowed=0
+    elif efi_available && [[ ! -w $EFIVARS ]]; then
+        if [[ $METHOD == uefi ]]; then
+            die 6 "EFI variables are read-only; try: mount -o remount,rw $EFIVARS"
+        fi
+        warn "EFI variables are read-only; skipping the UEFI method"
+        uefi_allowed=0
+    fi
+
+    local uefi_ok=0 grub_ok=0
+
+    if (( uefi_allowed )); then
+        if collect_uefi; then
+            if pick_uefi; then
+                if apply_uefi; then
+                    uefi_ok=1
+                elif [[ $METHOD == uefi ]]; then
+                    return 4
+                else
+                    warn 'could not set BootNext; trying the GRUB fallback'
+                fi
+            elif [[ $METHOD == uefi ]]; then
+                die 3 'no Windows entry was found in efibootmgr'
+            fi
+        elif [[ $METHOD == uefi ]]; then
+            die 5 'efibootmgr is not available or this system is not UEFI'
+        fi
+    fi
+
+    if (( !uefi_ok )) && [[ $METHOD == auto || $METHOD == grub ]]; then
+        if collect_grub && pick_grub; then
+            if apply_grub; then
+                grub_ok=1
+            fi
+        fi
+    fi
+
+    if (( !uefi_ok && !grub_ok )); then
+        die 3 'no Windows boot entry could be configured; run --detect --list for details'
+    fi
+
+    if (( DO_REBOOT )); then
+        say 'Rebooting into Windows...'
+        log_syslog 'reboot requested'
+        sync 2>/dev/null || true
+        if command -v systemctl >/dev/null 2>&1; then
+            systemctl reboot
+        else
+            reboot
+        fi
+        die 4 'failed to reboot'
+    fi
+
+    if [[ $CHOSEN_KIND == 'uefi' ]]; then
+        say "Next boot is set to Windows (Boot${CHOSEN_NUM}). Reboot when ready."
+    else
+        say "Next boot is set to Windows (${CHOSEN_TITLE}). Reboot when ready."
+    fi
+    return 0
+}
+
+main "$@"
