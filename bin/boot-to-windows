@@ -35,6 +35,7 @@ readonly EFIVARS='/sys/firmware/efi/efivars'
 DRY_RUN=0
 DETECT=0
 LIST_ALL=0
+CLEAR=0
 DO_REBOOT=1
 METHOD='auto'
 FORCED_ENTRY=''
@@ -65,6 +66,7 @@ Options:
   --list              List all UEFI entries and GRUB Windows entries
   --dry-run           Show what would be done without writing anything
   --no-reboot         Set the next boot entry but do not reboot
+  --clear             Clear a pending BootNext/GRUB next_entry and exit
   --method=METHOD     auto (default), uefi or grub
   --entry=XXXX        Force a specific UEFI entry (four hex digits)
   --escalate=HOW      auto (default), pkexec, sudo or none
@@ -99,6 +101,7 @@ while (($#)); do
         --dry-run) DRY_RUN=1 ;;
         --detect) DETECT=1 ;;
         --list) LIST_ALL=1 ;;
+        --clear) CLEAR=1 ;;
         --no-reboot) DO_REBOOT=0 ;;
         --reboot) DO_REBOOT=1 ;;
         --method=*) METHOD=${1#*=} ;;
@@ -518,7 +521,7 @@ apply_uefi() {
     next=$(efibootmgr 2>/dev/null |
         sed -n 's/^BootNext:[[:space:]]*//p' |
         tr -d '[:space:]' |
-        tr '[:lower:]' '[:upper:]')
+        tr '[:lower:]' '[:upper:]' || true)
 
     if [[ $next != "$CHOSEN_NUM" ]]; then
         err "verification failed: BootNext is '${next:-unset}', expected '$CHOSEN_NUM'"
@@ -552,7 +555,7 @@ apply_grub() {
         return 1
     fi
 
-    next=$("$editenv" list 2>/dev/null | sed -n 's/^next_entry=//p' | tail -n1)
+    next=$("$editenv" list 2>/dev/null | sed -n 's/^next_entry=//p' | tail -n1 || true)
 
     if [[ $next != "$CHOSEN_TITLE" ]]; then
         err "verification failed: next_entry is '${next:-unset}', expected '$CHOSEN_TITLE'"
@@ -561,6 +564,81 @@ apply_grub() {
 
     log_syslog "GRUB next_entry set to $CHOSEN_TITLE"
     say "Verified: next_entry=${CHOSEN_TITLE}"
+    return 0
+}
+
+# ---------------------------------------------------------------------------
+# Clear a pending one-shot selection
+# ---------------------------------------------------------------------------
+
+clear_next() {
+    local output next editenv
+
+    if efi_available && command -v efibootmgr >/dev/null 2>&1; then
+        next=$(efibootmgr 2>/dev/null |
+            sed -n 's/^BootNext:[[:space:]]*//p' |
+            tr -d '[:space:]' |
+            tr '[:lower:]' '[:upper:]' || true)
+
+        if [[ -n $next ]]; then
+            if (( DRY_RUN )); then
+                say "Would clear BootNext=${next} (efibootmgr -N)"
+            else
+                if ! output=$(efibootmgr -N 2>&1); then
+                    err "efibootmgr -N failed: ${output:-unknown error}"
+                    return 4
+                fi
+
+                next=$(efibootmgr 2>/dev/null |
+                    sed -n 's/^BootNext:[[:space:]]*//p' |
+                    tr -d '[:space:]' |
+                    tr '[:lower:]' '[:upper:]' || true)
+
+                if [[ -n $next ]]; then
+                    err "BootNext is still set to ${next}"
+                    return 4
+                fi
+
+                say 'BootNext cleared.'
+                log_syslog 'BootNext cleared'
+            fi
+        else
+            say 'BootNext is not set.'
+        fi
+    fi
+
+    if command -v grub2-editenv >/dev/null 2>&1 || command -v grub-editenv >/dev/null 2>&1; then
+        editenv=$(find_grub_editenv) || editenv=''
+        if [[ -n $editenv ]]; then
+            next=$("$editenv" list 2>/dev/null |
+                sed -n 's/^next_entry=//p' |
+                tail -n1 || true)
+
+            if [[ -n $next ]]; then
+                if (( DRY_RUN )); then
+                    say "Would clear GRUB next_entry=${next}"
+                else
+                    if ! output=$("$editenv" - unset next_entry 2>&1); then
+                        err "$editenv unset failed: ${output:-unknown error}"
+                        return 4
+                    fi
+
+                    next=$("$editenv" list 2>/dev/null |
+                        sed -n 's/^next_entry=//p' |
+                        tail -n1 || true)
+
+                    if [[ -n $next ]]; then
+                        err "GRUB next_entry is still set to ${next}"
+                        return 4
+                    fi
+
+                    say 'GRUB next_entry cleared.'
+                    log_syslog 'GRUB next_entry cleared'
+                fi
+            fi
+        fi
+    fi
+
     return 0
 }
 
@@ -637,7 +715,18 @@ show_detection() {
 }
 
 show_list() {
-    local i found=0 title
+    local i found=0 title next
+
+    if efi_available && command -v efibootmgr >/dev/null 2>&1; then
+        next=$(efibootmgr 2>/dev/null |
+            sed -n 's/^BootNext:[[:space:]]*//p' |
+            tr -d '[:space:]' |
+            tr '[:lower:]' '[:upper:]' || true)
+        if [[ -n $next ]]; then
+            say "BootNext: $next"
+            say ''
+        fi
+    fi
 
     if collect_uefi; then
         found=1
@@ -729,6 +818,11 @@ main() {
 
     if (( LIST_ALL )); then
         show_list
+        return $?
+    fi
+
+    if (( CLEAR )); then
+        clear_next
         return $?
     fi
 

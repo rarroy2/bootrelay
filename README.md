@@ -127,6 +127,7 @@ boot-to-windows --detect          # show detected Windows entries (no root)
 boot-to-windows --list            # list all UEFI entries and GRUB Windows entries
 boot-to-windows --dry-run         # show what would be done (no writes)
 sudo boot-to-windows --no-reboot  # set the next boot, do not reboot
+sudo boot-to-windows --clear      # clear a pending one-shot selection
 sudo boot-to-windows              # set the next boot and reboot now
 ```
 
@@ -136,6 +137,7 @@ sudo boot-to-windows              # set the next boot and reboot now
 | `--list` | List every UEFI entry (with score) and every GRUB Windows entry. |
 | `--dry-run` | Print the exact commands that would run. No writes, no reboot. |
 | `--no-reboot` | Write and verify the boot selection, then stop. |
+| `--clear` | Clear a pending `BootNext` / GRUB `next_entry` and exit. |
 | `--method=auto\|uefi\|grub` | Force a backend. Default: `auto`. |
 | `--entry=XXXX` | Force a specific UEFI entry, e.g. `--entry=0005`. |
 | `--escalate=auto\|pkexec\|sudo\|none` | How to obtain root when not already root. |
@@ -158,7 +160,9 @@ Exit codes:
 To undo a test without rebooting:
 
 ```bash
-sudo efibootmgr -N          # delete BootNext
+sudo boot-to-windows --clear   # clears BootNext and GRUB next_entry
+# or manually:
+sudo efibootmgr -N
 sudo grub2-editenv - unset next_entry
 ```
 
