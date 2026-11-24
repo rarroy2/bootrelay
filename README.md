@@ -105,6 +105,24 @@ gnome-extensions enable hello-depression@rarroy2.github.io
 You still need the helper in `/usr/local/bin/boot-to-windows`; use the installer
 for that.
 
+### Custom icon
+
+The button and the confirmation dialog use
+`extension/icons/hello-depression-symbolic.svg`. Replace it with your own SVG
+(monochrome or transparent background) and run:
+
+```bash
+make install-icon
+```
+
+GNOME reads the copy in `~/.local/share/icons/hicolor/...` before the one inside
+the extension directory, so the target updates both locations and refreshes the
+icon cache. If the old icon is still cached, log out and back in.
+
+> On Fedora 44 the pixbuf SVG loader rejected an icon that contained an XML
+> comment. Keep custom icons free of comments if the button appears without an
+> icon.
+
 ---
 
 ## Usage
@@ -292,6 +310,7 @@ Log out and back in to remove the button from the running session.
 | Symptom | Fix |
 |---|---|
 | No button appears | Log out and back in. Check `gnome-extensions list` and `journalctl -f -o cat /usr/bin/gnome-shell`. |
+| Button appears without an icon | Run `make install-icon`. Keep XML comments out of the SVG; validate it with `gdk-pixbuf`. |
 | `pkexec` still asks for a password | Rule not installed, or your user is not in `wheel` (`id`). Re-run `sudo ./install.sh`. |
 | “No Windows boot entry was detected” | Boot Windows once so firmware creates the entry, check `efibootmgr -v`, or force the entry with `--entry=XXXX`. |
 | `BootNext` is written but the machine boots Linux | Firmware ignores `BootNext`. Use `sudo boot-to-windows --method=grub`, or set the boot order in the firmware setup. |
