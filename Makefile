@@ -3,8 +3,11 @@
 
 SHELL := /bin/bash
 EXT_UUID := hello-depression@rarroy2.github.io
+VERSION := 0.2.0
+RPMTOP := $(CURDIR)/dist/rpmbuild
+RPMDEF := --define "_topdir $(RPMTOP)"
 
-.PHONY: all check detect install install-icon uninstall pack clean
+.PHONY: all check detect install install-icon uninstall pack prepare-rpm srpm rpm rpmlint clean
 
 all: check
 
@@ -19,6 +22,9 @@ check:
 		rm -f "$$tmp"; \
 	else \
 		echo "node not found, skipping extension syntax check"; \
+	fi
+	@if command -v rpmspec >/dev/null 2>&1; then \
+		rpmspec -P packaging/hello-depression.spec >/dev/null; \
 	fi
 	./bin/boot-to-windows --version
 	./bin/boot-to-windows --help >/dev/null
@@ -54,6 +60,28 @@ pack:
 	@mkdir -p dist
 	gnome-extensions pack --force --extra-source=icons --out-dir=dist extension
 	@echo "packed dist/$(EXT_UUID).shell-extension.zip"
+
+prepare-rpm:
+	@mkdir -p "$(RPMTOP)/SOURCES" "$(RPMTOP)/SPECS"
+	tar --exclude=./.git --exclude=./dist \
+		--transform 's,^\.,hello-depression-$(VERSION),' \
+		-czf "$(RPMTOP)/SOURCES/hello-depression-$(VERSION).tar.gz" .
+	cp packaging/hello-depression.spec "$(RPMTOP)/SPECS/"
+
+srpm: prepare-rpm
+	rpmbuild -bs $(RPMDEF) "$(RPMTOP)/SPECS/hello-depression.spec"
+
+rpm: prepare-rpm
+	rpmbuild -ba $(RPMDEF) "$(RPMTOP)/SPECS/hello-depression.spec"
+	@echo "built:"
+	@find "$(RPMTOP)/RPMS" "$(RPMTOP)/SRPMS" -name '*.rpm' -print
+
+rpmlint: rpm
+	@if command -v rpmlint >/dev/null 2>&1; then \
+		rpmlint "$(RPMTOP)"/RPMS/noarch/*.rpm "$(RPMTOP)"/SRPMS/*.src.rpm; \
+	else \
+		echo "rpmlint is not installed; skipping"; \
+	fi
 
 clean:
 	rm -rf dist

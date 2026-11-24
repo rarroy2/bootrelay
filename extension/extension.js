@@ -16,7 +16,10 @@ import * as Main from 'resource:///org/gnome/shell/ui/main.js';
 import * as QuickSettings from 'resource:///org/gnome/shell/ui/quickSettings.js';
 import {ModalDialog} from 'resource:///org/gnome/shell/ui/modalDialog.js';
 
-const HELPER_PATH = '/usr/local/bin/boot-to-windows';
+const HELPER_CANDIDATES = [
+    '/usr/bin/boot-to-windows',
+    '/usr/local/bin/boot-to-windows',
+];
 const SYMBOLIC_ICON = 'hello-depression-symbolic';
 const ICON_FILE = 'icons/hello-depression-symbolic.svg';
 const FALLBACK_ICON = 'system-reboot-symbolic';
@@ -28,6 +31,7 @@ export default class HelloDepressionExtension extends Extension {
         this._dialog = null;
 
         this._icon = this._resolveIcon();
+        this._helperPath = this._findHelper();
 
         this._toggle = new QuickSettings.QuickToggle({
             title: 'Ir a Windows',
@@ -82,6 +86,17 @@ export default class HelloDepressionExtension extends Extension {
         }
 
         return {iconName: FALLBACK_ICON};
+    }
+
+    _findHelper() {
+        for (const path of HELPER_CANDIDATES) {
+            if (Gio.File.new_for_path(path).query_exists(null))
+                return path;
+        }
+
+        // Report the missing helper from _runHelper() instead of failing here,
+        // so the extension itself still loads and can show a useful message.
+        return HELPER_CANDIDATES[0];
     }
 
     _onClicked() {
@@ -163,18 +178,26 @@ export default class HelloDepressionExtension extends Extension {
     _runHelper() {
         if (this._running)
             return;
+
+        if (!Gio.File.new_for_path(this._helperPath).query_exists(null)) {
+            this._notifyError(
+                'No se encontró boot-to-windows. Instala el paquete ' +
+                'hello-depression o ejecuta install.sh.');
+            return;
+        }
+
         this._running = true;
 
         // A sudoers NOPASSWD rule works without any polkit setup. With -n sudo
         // fails immediately (no prompt) when it is not allowed, so falling back
         // to pkexec is safe: polkit either grants silently or asks for a password.
-        this._spawnHelper(['sudo', '-n', HELPER_PATH, '--reboot', '--quiet'],
+        this._spawnHelper(['sudo', '-n', this._helperPath, '--reboot', '--quiet'],
             result => {
                 if (result.ok)
                     return; // The machine is rebooting.
 
                 if (result.spawnFailed || result.status === 1) {
-                    this._spawnHelper(['pkexec', HELPER_PATH, '--reboot', '--quiet'],
+                    this._spawnHelper(['pkexec', this._helperPath, '--reboot', '--quiet'],
                         pkResult => {
                             this._running = false;
                             if (!pkResult.ok && this._enabled) {

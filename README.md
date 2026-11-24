@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="assets/hello-depression-icon.svg" width="112" alt="Hello Depression icon">
+</p>
+
 # Hello Depression
 
 > A GNOME Quick Settings button that reboots straight into Windows on a Fedora dual-boot machine.
@@ -65,6 +69,34 @@ sudo dnf install efibootmgr polkit
 
 ## Installation
 
+### Fedora package (RPM)
+
+Install the RPM attached to the release:
+
+```bash
+sudo dnf install ./hello-depression-0.2.0-1.fc44.noarch.rpm
+```
+
+The package installs the helper at `/usr/bin/boot-to-windows`, the polkit rule in
+`/usr/share/polkit-1/rules.d/`, the extension in
+`/usr/share/gnome-shell/extensions/` and the icon in the system icon theme.
+
+Log out and back in, then enable the extension if it is not already enabled:
+
+```bash
+gnome-extensions enable hello-depression@rarroy2.github.io
+```
+
+A COPR repository is prepared as `rarroy2/hello-depression`; see
+[packaging/README.md](packaging/README.md) for the publishing steps.
+
+> If you previously installed with `install.sh`, run `sudo ./uninstall.sh` before
+> installing the RPM. The manual polkit rule in `/etc` would otherwise override
+> the packaged one, and the per-user extension would shadow the system
+> extension.
+
+### From source (installer)
+
 ```bash
 git clone https://github.com/rarroy2/hello-depression.git
 cd hello-depression
@@ -102,8 +134,8 @@ gnome-extensions install --force dist/hello-depression@rarroy2.github.io.shell-e
 gnome-extensions enable hello-depression@rarroy2.github.io
 ```
 
-You still need the helper in `/usr/local/bin/boot-to-windows`; use the installer
-for that.
+You still need the helper in `/usr/bin/boot-to-windows` or
+`/usr/local/bin/boot-to-windows`; use the RPM or the installer for that.
 
 ### Custom icon
 
@@ -195,7 +227,7 @@ sudo grub2-editenv - unset next_entry
 ```text
 Quick Settings toggle ("Ir a Windows")
   └─ confirmation dialog
-       └─ sudo -n /usr/local/bin/boot-to-windows --reboot --quiet
+       └─ sudo -n boot-to-windows --reboot --quiet
             │   (falls back to pkexec when sudo is not authorized)
             ├─ efibootmgr -n 0005        (UEFI: one-shot BootNext)
             │    └─ verify BootNext == 0005
@@ -250,18 +282,22 @@ refuses to continue when it can read a different value.
 
 ## Privilege model
 
-Writing `BootNext` requires root. The extension tries `sudo -n` first and then
-`pkexec`; the installer decides which mechanism is authorized silently.
+Writing `BootNext` requires root. The extension looks for the helper in
+`/usr/bin` (RPM) and `/usr/local/bin` (installer), then tries `sudo -n` first and
+`pkexec` as a fallback.
 
 ### Default: polkit rule
 
-`/etc/polkit-1/rules.d/49-hello-depression.rules`:
+The RPM installs the rule in `/usr/share/polkit-1/rules.d/`; the manual installer
+uses `/etc/polkit-1/rules.d/`. Both allow the two supported helper paths:
 
 ```js
 polkit.addRule(function (action, subject) {
     if (action.id !== 'org.freedesktop.policykit.exec')
         return null;
-    if (action.lookup('program') !== '/usr/local/bin/boot-to-windows')
+    var program = action.lookup('program');
+    if (program !== '/usr/bin/boot-to-windows' &&
+        program !== '/usr/local/bin/boot-to-windows')
         return null;
     if (!subject.local || !subject.active)
         return null;
@@ -277,7 +313,7 @@ is removed, `pkexec` falls back to asking for a password instead of breaking.
 ### Alternative: sudoers
 
 ```sudoers
-%wheel ALL=(root) NOPASSWD: /usr/local/bin/boot-to-windows
+%wheel ALL=(root) NOPASSWD: /usr/bin/boot-to-windows, /usr/local/bin/boot-to-windows
 ```
 
 Installed as `/etc/sudoers.d/hello-depression` (`0440`) after validation with
@@ -298,12 +334,21 @@ password.
 
 ## Uninstall
 
+With the RPM:
+
+```bash
+sudo dnf remove hello-depression
+```
+
+With the manual installer:
+
 ```bash
 sudo ./uninstall.sh
 ```
 
-This disables and removes the extension, the helper, the icon and both privilege
-rules. It does **not** touch `BootNext`, `BootOrder`, GRUB or Windows.
+The RPM removal deletes the system helper, the polkit rule, the system extension
+and the icon. The manual uninstaller does the same for the `/usr/local` copy. It
+does **not** touch `BootNext`, `BootOrder`, GRUB or Windows.
 
 Log out and back in to remove the button from the running session.
 
@@ -359,9 +404,12 @@ journalctl -t boot-to-windows --since today
 ## Development
 
 ```bash
-make check     # bash -n, JS syntax check, --version/--help
+make check     # bash -n, JS syntax check, spec parse, --version/--help
 make detect    # run the UEFI detection on this machine
 make pack      # build dist/<uuid>.shell-extension.zip
+make srpm      # build dist/rpmbuild/SRPMS/*.src.rpm
+make rpm       # build the noarch RPM in dist/rpmbuild/RPMS/
+make rpmlint   # run rpmlint if it is installed
 make clean
 ```
 
@@ -380,10 +428,12 @@ Project layout:
 bin/boot-to-windows                    privileged helper
 extension/{metadata.json,extension.js} GNOME Shell extension
 extension/icons/                       original segmented restart icon
+assets/                                README icon/badge
+packaging/hello-depression.spec        RPM spec and COPR instructions
 polkit/49-hello-depression.rules       default passwordless rule
 sudoers/hello-depression               alternative rule
 install.sh, uninstall.sh               installer and remover
-Makefile                               check, detect, pack, clean
+Makefile                               check, detect, pack, rpm, clean
 ```
 
 ---

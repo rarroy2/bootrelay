@@ -29,7 +29,7 @@ export PATH=/usr/sbin:/usr/bin:/sbin:/bin
 umask 022
 
 readonly PROG_NAME='boot-to-windows'
-readonly VERSION='0.1.0'
+readonly VERSION='0.2.0'
 readonly EFIVARS='/sys/firmware/efi/efivars'
 
 DRY_RUN=0

@@ -5,14 +5,17 @@
 // root without a password prompt, but ONLY that exact program. The helper
 // itself validates its arguments and does not execute arbitrary commands.
 //
-// Install to: /etc/polkit-1/rules.d/49-hello-depression.rules
+// Manual installer: /etc/polkit-1/rules.d/49-hello-depression.rules
+// RPM package:      /usr/share/polkit-1/rules.d/49-hello-depression.rules
 // Owner: root:root, mode 0644.
 
 polkit.addRule(function (action, subject) {
     if (action.id !== 'org.freedesktop.policykit.exec')
         return null;
 
-    if (action.lookup('program') !== '/usr/local/bin/boot-to-windows')
+    var program = action.lookup('program');
+    if (program !== '/usr/bin/boot-to-windows' &&
+        program !== '/usr/local/bin/boot-to-windows')
         return null;
 
     if (!subject.local || !subject.active)

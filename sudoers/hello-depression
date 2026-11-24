@@ -7,4 +7,4 @@
 # Only the helper itself is allowed. The helper validates its arguments and
 # never executes arbitrary commands.
 
-%wheel ALL=(root) NOPASSWD: /usr/local/bin/boot-to-windows
+%wheel ALL=(root) NOPASSWD: /usr/bin/boot-to-windows, /usr/local/bin/boot-to-windows
