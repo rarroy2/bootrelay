@@ -122,6 +122,10 @@ icon cache. If the old icon is still cached, log out and back in.
 > On Fedora 44 the pixbuf SVG loader rejected an icon that contained an XML
 > comment. Keep custom icons free of comments if the button appears without an
 > icon.
+>
+> Symbolic icons are recoloured through their alpha channel. Masks, filters and
+> other effects may not survive that process: use explicit paths with
+> transparent gaps instead.
 
 ---
 
