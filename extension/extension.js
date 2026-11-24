@@ -93,7 +93,7 @@ export default class HelloDepressionExtension extends Extension {
         const content = new St.BoxLayout({
             vertical: true,
             x_expand: true,
-            spacing: 10,
+            style: 'spacing: 10px;',
         });
 
         content.add_child(new St.Icon({
