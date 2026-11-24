@@ -572,7 +572,8 @@ apply_grub() {
 # ---------------------------------------------------------------------------
 
 clear_next() {
-    local output next editenv
+    local output next editenv bootnext_var
+    bootnext_var="$EFIVARS/BootNext-8be4df61-93ca-11d2-aa0d-00e098032b8c"
 
     if efi_available && command -v efibootmgr >/dev/null 2>&1; then
         next=$(efibootmgr 2>/dev/null |
@@ -582,20 +583,18 @@ clear_next() {
 
         if [[ -n $next ]]; then
             if (( DRY_RUN )); then
-                say "Would clear BootNext=${next} (efibootmgr -N)"
+                say "Would clear BootNext=${next}"
             else
-                if ! output=$(efibootmgr -N 2>&1); then
-                    err "efibootmgr -N failed: ${output:-unknown error}"
+                # efibootmgr 18 on Fedora 44 mis-parses -N and complains about
+                # entry 0001, so remove the EFI variable directly. This is the
+                # same operation efi_del_variable() performs.
+                if ! output=$(rm -f -- "$bootnext_var" 2>&1); then
+                    err "failed to remove BootNext: ${output:-unknown error}"
                     return 4
                 fi
 
-                next=$(efibootmgr 2>/dev/null |
-                    sed -n 's/^BootNext:[[:space:]]*//p' |
-                    tr -d '[:space:]' |
-                    tr '[:lower:]' '[:upper:]' || true)
-
-                if [[ -n $next ]]; then
-                    err "BootNext is still set to ${next}"
+                if [[ -e $bootnext_var ]]; then
+                    err "BootNext is still present at ${bootnext_var}"
                     return 4
                 fi
 
@@ -887,9 +886,9 @@ main() {
     fi
 
     if [[ $CHOSEN_KIND == 'uefi' ]]; then
-        say "Next boot is set to Windows (Boot${CHOSEN_NUM}). Reboot when ready."
+        say "Next boot is set to Boot${CHOSEN_NUM} (${CHOSEN_LABEL}). Reboot when ready."
     else
-        say "Next boot is set to Windows (${CHOSEN_TITLE}). Reboot when ready."
+        say "Next boot is set to ${CHOSEN_TITLE}. Reboot when ready."
     fi
     return 0
 }

@@ -162,7 +162,7 @@ To undo a test without rebooting:
 ```bash
 sudo boot-to-windows --clear   # clears BootNext and GRUB next_entry
 # or manually:
-sudo efibootmgr -N
+sudo rm -f /sys/firmware/efi/efivars/BootNext-8be4df61-93ca-11d2-aa0d-00e098032b8c
 sudo grub2-editenv - unset next_entry
 ```
 
@@ -308,7 +308,7 @@ boot-to-windows --detect
 boot-to-windows --list
 sudo boot-to-windows --dry-run
 efibootmgr -v
-sudo efibootmgr -N
+sudo boot-to-windows --clear
 journalctl -t boot-to-windows --since today
 ```
 
