@@ -1,0 +1,15 @@
+{
+    "uuid": "hello-depression@rarroy2.github.io",
+    "name": "Hello Depression",
+    "description": "Adds an 'Ir a Windows' button to Quick Settings that reboots straight into Windows on dual-boot systems. Because sometimes you have to.",
+    "shell-version": [
+        "45",
+        "46",
+        "47",
+        "48",
+        "49",
+        "50"
+    ],
+    "url": "https://github.com/rarroy2/hello-depression",
+    "version": 1
+}
