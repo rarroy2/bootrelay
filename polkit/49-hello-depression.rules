@@ -1,0 +1,25 @@
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2026 Raúl Arroyo (rarroy2)
+//
+// Allow members of the "wheel" group to run the hello-depression helper as
+// root without a password prompt, but ONLY that exact program. The helper
+// itself validates its arguments and does not execute arbitrary commands.
+//
+// Install to: /etc/polkit-1/rules.d/49-hello-depression.rules
+// Owner: root:root, mode 0644.
+
+polkit.addRule(function (action, subject) {
+    if (action.id !== 'org.freedesktop.policykit.exec')
+        return null;
+
+    if (action.lookup('program') !== '/usr/local/bin/boot-to-windows')
+        return null;
+
+    if (!subject.local || !subject.active)
+        return null;
+
+    if (!subject.isInGroup('wheel'))
+        return null;
+
+    return polkit.Result.YES;
+});

@@ -1,0 +1,10 @@
+# SPDX-License-Identifier: MIT
+# Copyright (c) 2026 Raúl Arroyo (rarroy2)
+#
+# Passwordless alternative to the polkit rule.
+# Validated by install.sh with: visudo -cf <this file>
+#
+# Only the helper itself is allowed. The helper validates its arguments and
+# never executes arbitrary commands.
+
+%wheel ALL=(root) NOPASSWD: /usr/local/bin/boot-to-windows
