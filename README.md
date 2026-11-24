@@ -169,7 +169,8 @@ sudo grub2-editenv - unset next_entry
 ```text
 Quick Settings toggle ("Ir a Windows")
   └─ confirmation dialog
-       └─ pkexec /usr/local/bin/boot-to-windows --reboot --quiet
+       └─ sudo -n /usr/local/bin/boot-to-windows --reboot --quiet
+            │   (falls back to pkexec when sudo is not authorized)
             ├─ efibootmgr -n 0005        (UEFI: one-shot BootNext)
             │    └─ verify BootNext == 0005
             │         └─ systemctl reboot
@@ -223,8 +224,8 @@ refuses to continue when it can read a different value.
 
 ## Privilege model
 
-Writing `BootNext` requires root. The extension always invokes the helper through
-`pkexec`; the installer decides whether polkit grants that request silently.
+Writing `BootNext` requires root. The extension tries `sudo -n` first and then
+`pkexec`; the installer decides which mechanism is authorized silently.
 
 ### Default: polkit rule
 
@@ -254,9 +255,8 @@ is removed, `pkexec` falls back to asking for a password instead of breaking.
 ```
 
 Installed as `/etc/sudoers.d/hello-depression` (`0440`) after validation with
-`visudo -cf`. The extension still calls `pkexec`, so use this mode only if your
-polkit setup is unusual or you specifically prefer sudo; the polkit mode is the
-one exercised by the default flow.
+`visudo -cf`. The extension tries `sudo -n` first and falls back to `pkexec`, so
+either privilege mode works without extra configuration.
 
 ### Interactive mode
 

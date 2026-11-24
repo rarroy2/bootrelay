@@ -161,34 +161,66 @@ export default class HelloDepressionExtension extends Extension {
             return;
         this._running = true;
 
+        // A sudoers NOPASSWD rule works without any polkit setup. With -n sudo
+        // fails immediately (no prompt) when it is not allowed, so falling back
+        // to pkexec is safe: polkit either grants silently or asks for a password.
+        this._spawnHelper(['sudo', '-n', HELPER_PATH, '--reboot', '--quiet'],
+            result => {
+                if (result.ok)
+                    return; // The machine is rebooting.
+
+                if (result.spawnFailed || result.status === 1) {
+                    this._spawnHelper(['pkexec', HELPER_PATH, '--reboot', '--quiet'],
+                        pkResult => {
+                            this._running = false;
+                            if (!pkResult.ok && this._enabled) {
+                                this._notifyError(pkResult.detail ||
+                                    result.detail);
+                            }
+                        });
+                    return;
+                }
+
+                this._running = false;
+                if (this._enabled)
+                    this._notifyError(result.detail);
+            });
+    }
+
+    _spawnHelper(argv, callback) {
         let proc;
+
         try {
-            proc = Gio.Subprocess.new(
-                ['pkexec', HELPER_PATH, '--reboot', '--quiet'],
-                Gio.SubprocessFlags.STDOUT_PIPE | Gio.SubprocessFlags.STDERR_PIPE);
+            proc = Gio.Subprocess.new(argv,
+                Gio.SubprocessFlags.STDOUT_PIPE |
+                Gio.SubprocessFlags.STDERR_PIPE);
         } catch (e) {
-            this._running = false;
-            this._notifyError(e.message);
+            callback({
+                ok: false,
+                spawnFailed: true,
+                status: -1,
+                detail: e.message,
+            });
             return;
         }
 
         proc.communicate_utf8_async(null, null, (p, res) => {
-            this._running = false;
-
-            if (!this._enabled)
-                return;
-
             try {
                 const [, stdout, stderr] = p.communicate_utf8_finish(res);
 
-                if (p.get_successful())
-                    return; // The machine is rebooting.
-
-                const detail = (stderr || '').trim() || (stdout || '').trim();
-                this._notifyError(detail ||
-                    `boot-to-windows terminó con estado ${p.get_exit_status()}`);
+                callback({
+                    ok: p.get_successful(),
+                    spawnFailed: false,
+                    status: p.get_exit_status(),
+                    detail: (stderr || '').trim() || (stdout || '').trim(),
+                });
             } catch (e) {
-                this._notifyError(e.message);
+                callback({
+                    ok: false,
+                    spawnFailed: true,
+                    status: -1,
+                    detail: e.message,
+                });
             }
         });
     }
