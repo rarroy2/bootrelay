@@ -72,7 +72,9 @@ sudo ./install.sh
 ```
 
 Then **log out and log back in**. GNOME Shell does not load a brand-new extension
-into the current Wayland session.
+into the current Wayland session. If the running shell has not scanned the new
+folder yet, the installer registers it in the enabled-extensions list so it loads
+automatically after the relogin.
 
 After logging in, open Quick Settings (top-right corner) and you will see
 **Ir a Windows** in the toggle grid.

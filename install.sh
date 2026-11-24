@@ -88,6 +88,35 @@ run_as_user() {
     fi
 }
 
+# Fallback used when the extension was copied after the current shell session
+# started: the running shell has not scanned it yet, so gnome-extensions cannot
+# enable it. Adding it to the dconf list makes it load on the next login.
+enable_extension_via_gsettings() {
+    local current inner value
+
+    if ! current=$(run_as_user env "${SESSION_ENV[@]}" \
+        gsettings get org.gnome.shell enabled-extensions 2>/dev/null); then
+        return 1
+    fi
+
+    inner=${current#@as }
+    inner=${inner#[}
+    inner=${inner%]}
+
+    if [[ $inner == *"'$EXT_UUID'"* ]]; then
+        return 0
+    fi
+
+    if [[ -n $inner ]]; then
+        value="[$inner, '$EXT_UUID']"
+    else
+        value="['$EXT_UUID']"
+    fi
+
+    run_as_user env "${SESSION_ENV[@]}" \
+        gsettings set org.gnome.shell enabled-extensions "$value"
+}
+
 TEMP_FILE=''
 cleanup() {
     if [[ -n $TEMP_FILE ]]; then
@@ -168,6 +197,10 @@ fi
 TARGET_HOME=$(getent passwd "$TARGET_USER" | cut -d: -f6)
 TARGET_UID=$(id -u "$TARGET_USER")
 TARGET_GROUP=$(id -gn "$TARGET_USER")
+SESSION_ENV=(
+    XDG_RUNTIME_DIR="/run/user/$TARGET_UID"
+    DBUS_SESSION_BUS_ADDRESS="unix:path=/run/user/$TARGET_UID/bus"
+)
 
 if [[ ! -d $TARGET_HOME ]]; then
     die "home directory '$TARGET_HOME' does not exist"
@@ -316,15 +349,17 @@ if (( DO_ENABLE )); then
         warn "no session bus for $TARGET_USER; enable later with:"
         warn "  gnome-extensions enable $EXT_UUID"
     else
-        if run_as_user env \
-            XDG_RUNTIME_DIR="/run/user/$TARGET_UID" \
-            DBUS_SESSION_BUS_ADDRESS="unix:path=/run/user/$TARGET_UID/bus" \
-            gnome-extensions enable "$EXT_UUID"; then
+        if run_as_user env "${SESSION_ENV[@]}" \
+            gnome-extensions enable "$EXT_UUID" 2>/dev/null; then
             if (( ! DRY_RUN )); then
                 say 'Extension enabled.'
             fi
+        elif enable_extension_via_gsettings; then
+            if (( ! DRY_RUN )); then
+                say 'Extension added to the enabled list; it will load after you log back in.'
+            fi
         else
-            warn 'could not enable the extension automatically; run:'
+            warn 'could not enable the extension automatically; run after logging in:'
             warn "  gnome-extensions enable $EXT_UUID"
         fi
     fi

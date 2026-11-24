@@ -68,6 +68,45 @@ run_as_user() {
     fi
 }
 
+# Remove a UUID from a list-valued dconf key, preserving the other entries.
+gsettings_remove_uuid() {
+    local key=$1 current inner result='' sep='' item
+    local -a items=()
+
+    if ! current=$(run_as_user env "${SESSION_ENV[@]}" \
+        gsettings get org.gnome.shell "$key" 2>/dev/null); then
+        return 1
+    fi
+
+    inner=${current#@as }
+    inner=${inner#[}
+    inner=${inner%]}
+
+    if [[ -z $inner ]]; then
+        return 0
+    fi
+
+    local IFS=','
+    read -r -a items <<<"$inner"
+
+    for item in "${items[@]}"; do
+        item="${item#"${item%%[![:space:]]*}"}"
+        item="${item%"${item##*[![:space:]]}"}"
+        item=${item#\'}
+        item=${item%\'}
+
+        if [[ -z $item || $item == "$EXT_UUID" ]]; then
+            continue
+        fi
+
+        result+="$sep'$item'"
+        sep=', '
+    done
+
+    run_as_user env "${SESSION_ENV[@]}" \
+        gsettings set org.gnome.shell "$key" "[$result]"
+}
+
 ORIGINAL_ARGS=("$@")
 
 while (($#)); do
@@ -118,6 +157,10 @@ fi
 
 TARGET_HOME=$(getent passwd "$TARGET_USER" | cut -d: -f6)
 TARGET_UID=$(id -u "$TARGET_USER")
+SESSION_ENV=(
+    XDG_RUNTIME_DIR="/run/user/$TARGET_UID"
+    DBUS_SESSION_BUS_ADDRESS="unix:path=/run/user/$TARGET_UID/bus"
+)
 EXT_DIR="$TARGET_HOME/.local/share/gnome-shell/extensions/$EXT_UUID"
 HICOLOR_ICON="$TARGET_HOME/.local/share/icons/hicolor/scalable/actions/boot-to-windows-symbolic.svg"
 
@@ -125,11 +168,16 @@ say "Removing hello-depression for user: $TARGET_USER"
 
 # Disable first so GNOME Shell does not keep a reference to a deleted extension.
 if command -v gnome-extensions >/dev/null 2>&1 && [[ -S /run/user/$TARGET_UID/bus ]]; then
-    run_as_user env \
-        XDG_RUNTIME_DIR="/run/user/$TARGET_UID" \
-        DBUS_SESSION_BUS_ADDRESS="unix:path=/run/user/$TARGET_UID/bus" \
-        gnome-extensions disable "$EXT_UUID" ||
+    run_as_user env "${SESSION_ENV[@]}" \
+        gnome-extensions disable "$EXT_UUID" 2>/dev/null ||
         warn 'could not disable the extension automatically (it will disappear after logout)'
+
+    if (( ! DRY_RUN )) && command -v gsettings >/dev/null 2>&1; then
+        gsettings_remove_uuid enabled-extensions ||
+            warn 'could not update the enabled-extensions list'
+        gsettings_remove_uuid disabled-extensions ||
+            warn 'could not update the disabled-extensions list'
+    fi
 fi
 
 if [[ -d $EXT_DIR ]]; then
