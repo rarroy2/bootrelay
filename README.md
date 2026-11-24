@@ -347,7 +347,8 @@ The extension targets the GNOME 45+ ESM APIs:
 - `SystemIndicator` + `Main.panel.statusArea.quickSettings.addExternalIndicator()`
 - `ModalDialog` with `addButton({label, action, default, key})`
 
-Tested on Fedora 44, GNOME Shell 50.6, Wayland, UEFI.
+Tested end-to-end (install → click → reboot into Windows → return to Fedora)
+on Fedora 44, GNOME Shell 50.6, Wayland, UEFI.
 
 Project layout:
 
