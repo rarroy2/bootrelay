@@ -4,8 +4,8 @@
 // Hello Depression - GNOME Shell extension
 //
 // Adds an "Ir a Windows" toggle to the Quick Settings grid. Clicking it opens
-// a confirmation dialog; confirming runs the privileged helper through pkexec
-// and the machine reboots into Windows.
+// a confirmation dialog; confirming runs the privileged helper and the machine
+// reboots into Windows.
 
 import Clutter from 'gi://Clutter';
 import Gio from 'gi://Gio';
@@ -17,7 +17,8 @@ import * as QuickSettings from 'resource:///org/gnome/shell/ui/quickSettings.js'
 import {ModalDialog} from 'resource:///org/gnome/shell/ui/modalDialog.js';
 
 const HELPER_PATH = '/usr/local/bin/boot-to-windows';
-const SYMBOLIC_ICON = 'boot-to-windows-symbolic';
+const SYMBOLIC_ICON = 'hello-depression-symbolic';
+const ICON_FILE = 'icons/hello-depression-symbolic.svg';
 const FALLBACK_ICON = 'system-reboot-symbolic';
 
 export default class HelloDepressionExtension extends Extension {
@@ -26,12 +27,12 @@ export default class HelloDepressionExtension extends Extension {
         this._running = false;
         this._dialog = null;
 
-        this._iconName = this._resolveIcon();
+        this._icon = this._resolveIcon();
 
         this._toggle = new QuickSettings.QuickToggle({
             title: 'Ir a Windows',
             subtitle: 'Reiniciar en Windows',
-            iconName: this._iconName,
+            ...this._icon,
             // This is an action, not a switch: never stay visually "checked".
             toggleMode: false,
         });
@@ -65,19 +66,22 @@ export default class HelloDepressionExtension extends Extension {
 
     _resolveIcon() {
         try {
-            const theme = St.IconTheme.get_default();
-            const iconDir = `${this.path}/icons`;
-
-            if (!theme.get_search_path().includes(iconDir))
-                theme.append_search_path(iconDir);
-
+            const theme = new St.IconTheme();
             if (theme.has_icon(SYMBOLIC_ICON))
-                return SYMBOLIC_ICON;
+                return {iconName: SYMBOLIC_ICON};
         } catch (e) {
-            console.debug(`hello-depression: could not set up the icon theme: ${e}`);
+            console.debug(`hello-depression: icon theme lookup failed: ${e}`);
         }
 
-        return FALLBACK_ICON;
+        try {
+            const iconPath = `${this.path}/${ICON_FILE}`;
+            if (Gio.File.new_for_path(iconPath).query_exists(null))
+                return {gicon: Gio.icon_new_for_string(iconPath)};
+        } catch (e) {
+            console.debug(`hello-depression: could not load the bundled icon: ${e}`);
+        }
+
+        return {iconName: FALLBACK_ICON};
     }
 
     _onClicked() {
@@ -97,7 +101,7 @@ export default class HelloDepressionExtension extends Extension {
         });
 
         content.add_child(new St.Icon({
-            iconName: this._iconName,
+            ...this._icon,
             icon_size: 48,
             style_class: 'hello-depression-dialog-icon',
         }));

@@ -327,8 +327,9 @@ journalctl -t boot-to-windows --since today
   The exit code and verification will tell you; use the GRUB fallback instead.
 - **No partition writes.** Only `BootNext` (or GRUB `next_entry`) is changed, and
   both are one-shot.
-- **Trademark:** “Windows” and the four-pane logo are trademarks of Microsoft
-  Corporation. This project is not affiliated with or endorsed by Microsoft.
+- **Trademark:** “Windows” is a trademark of Microsoft Corporation. The icon is
+  an original segmented restart ring and does not use Microsoft artwork. This
+  project is not affiliated with or endorsed by Microsoft.
 
 ---
 
@@ -355,7 +356,7 @@ Project layout:
 ```text
 bin/boot-to-windows                    privileged helper
 extension/{metadata.json,extension.js} GNOME Shell extension
-extension/icons/                       symbolic four-pane icon
+extension/icons/                       original segmented restart icon
 polkit/49-hello-depression.rules       default passwordless rule
 sudoers/hello-depression               alternative rule
 install.sh, uninstall.sh               installer and remover

@@ -35,7 +35,7 @@ readonly HELPER_SRC="$SCRIPT_DIR/bin/boot-to-windows"
 readonly POLKIT_SRC="$SCRIPT_DIR/polkit/49-hello-depression.rules"
 readonly SUDOERS_SRC="$SCRIPT_DIR/sudoers/hello-depression"
 readonly EXT_SRC="$SCRIPT_DIR/extension"
-readonly ICON_SRC="$EXT_SRC/icons/boot-to-windows-symbolic.svg"
+readonly ICON_SRC="$EXT_SRC/icons/hello-depression-symbolic.svg"
 
 PASSWORDLESS='polkit'
 DO_ENABLE=1
@@ -333,9 +333,13 @@ run install -o "$TARGET_USER" -g "$TARGET_GROUP" -m 0644 \
 run install -o "$TARGET_USER" -g "$TARGET_GROUP" -m 0644 \
     "$EXT_SRC/extension.js" "$EXT_DIR/extension.js"
 run install -o "$TARGET_USER" -g "$TARGET_GROUP" -m 0644 \
-    "$ICON_SRC" "$EXT_DIR/icons/boot-to-windows-symbolic.svg"
+    "$ICON_SRC" "$EXT_DIR/icons/hello-depression-symbolic.svg"
 run install -o "$TARGET_USER" -g "$TARGET_GROUP" -m 0644 \
-    "$ICON_SRC" "$HICOLOR_DIR/boot-to-windows-symbolic.svg"
+    "$ICON_SRC" "$HICOLOR_DIR/hello-depression-symbolic.svg"
+
+# Clean up the icon names used by 0.1.x.
+run rm -f "$EXT_DIR/icons/boot-to-windows-symbolic.svg" \
+    "$HICOLOR_DIR/boot-to-windows-symbolic.svg"
 
 if command -v gtk-update-icon-cache >/dev/null 2>&1 &&
     [[ -f "$TARGET_HOME/.local/share/icons/hicolor/index.theme" ]]; then

@@ -162,7 +162,8 @@ SESSION_ENV=(
     DBUS_SESSION_BUS_ADDRESS="unix:path=/run/user/$TARGET_UID/bus"
 )
 EXT_DIR="$TARGET_HOME/.local/share/gnome-shell/extensions/$EXT_UUID"
-HICOLOR_ICON="$TARGET_HOME/.local/share/icons/hicolor/scalable/actions/boot-to-windows-symbolic.svg"
+HICOLOR_ICON="$TARGET_HOME/.local/share/icons/hicolor/scalable/actions/hello-depression-symbolic.svg"
+LEGACY_HICOLOR_ICON="$TARGET_HOME/.local/share/icons/hicolor/scalable/actions/boot-to-windows-symbolic.svg"
 
 say "Removing hello-depression for user: $TARGET_USER"
 
@@ -184,9 +185,9 @@ if [[ -d $EXT_DIR ]]; then
     run rm -rf "$EXT_DIR"
 fi
 
-if [[ -f $HICOLOR_ICON ]]; then
+if [[ -f $HICOLOR_ICON || -f $LEGACY_HICOLOR_ICON ]]; then
     ICON_EXISTS=1
-    run rm -f "$HICOLOR_ICON"
+    run rm -f "$HICOLOR_ICON" "$LEGACY_HICOLOR_ICON"
 else
     ICON_EXISTS=0
 fi
