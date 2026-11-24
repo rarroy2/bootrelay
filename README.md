@@ -87,8 +87,15 @@ Log out and back in, then enable the extension if it is not already enabled:
 gnome-extensions enable hello-depression@rarroy2.github.io
 ```
 
-A COPR repository is prepared as `rarroy2/hello-depression`; see
-[packaging/README.md](packaging/README.md) for the publishing steps.
+A COPR repository is prepared as `rarroy2/hello-depression`. Once it is
+published:
+
+```bash
+sudo dnf copr enable rarroy2/hello-depression
+sudo dnf install hello-depression
+```
+
+See [packaging/README.md](packaging/README.md) for the publishing steps.
 
 > If you previously installed with `install.sh`, run `sudo ./uninstall.sh` before
 > installing the RPM. The manual polkit rule in `/etc` would otherwise override
@@ -420,7 +427,8 @@ The extension targets the GNOME 45+ ESM APIs:
 - `ModalDialog` with `addButton({label, action, default, key})`
 
 Tested end-to-end (install → click → reboot into Windows → return to Fedora)
-on Fedora 44, GNOME Shell 50.6, Wayland, UEFI.
+on Fedora 44, GNOME Shell 50.6, Wayland, UEFI, both with the source installer
+and with the `hello-depression` RPM.
 
 Project layout:
 
