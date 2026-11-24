@@ -87,16 +87,6 @@ Log out and back in, then enable the extension if it is not already enabled:
 gnome-extensions enable hello-depression@rarroy2.github.io
 ```
 
-A COPR repository is prepared as `rarroy2/hello-depression`. Once it is
-published:
-
-```bash
-sudo dnf copr enable rarroy2/hello-depression
-sudo dnf install hello-depression
-```
-
-See [packaging/README.md](packaging/README.md) for the publishing steps.
-
 > If you previously installed with `install.sh`, run `sudo ./uninstall.sh` before
 > installing the RPM. The manual polkit rule in `/etc` would otherwise override
 > the packaged one, and the per-user extension would shadow the system
@@ -437,7 +427,7 @@ bin/boot-to-windows                    privileged helper
 extension/{metadata.json,extension.js} GNOME Shell extension
 extension/icons/                       original segmented restart icon
 assets/                                README icon/badge
-packaging/hello-depression.spec        RPM spec and COPR instructions
+packaging/hello-depression.spec        RPM spec
 polkit/49-hello-depression.rules       default passwordless rule
 sudoers/hello-depression               alternative rule
 install.sh, uninstall.sh               installer and remover
