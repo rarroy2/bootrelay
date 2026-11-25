@@ -429,6 +429,15 @@ journalctl -t bootrelay --since today
 
 ---
 
+## Roadmap
+
+- [#1 — Distribution portability and one button per installed OS](https://github.com/rarroy2/bootrelay/issues/1)
+- [#2 — Windows client: one-click switch from Windows to Fedora](https://github.com/rarroy2/bootrelay/issues/2)
+
+The current release still exposes a single **Ir a Windows** action. The roadmap
+covers testing other distributions and showing every installed OS as its own
+Quick Settings entry, plus a Windows client for the reverse direction.
+
 ## Development
 
 ```bash
