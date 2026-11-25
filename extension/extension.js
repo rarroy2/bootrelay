@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
 // Copyright (c) 2026 Raúl Arroyo (rarroy2)
 //
-// Hello Depression - GNOME Shell extension
+// BootRelay - GNOME Shell extension
 //
 // Adds an "Ir a Windows" toggle to the Quick Settings grid. Clicking it opens
 // a confirmation dialog; confirming runs the privileged helper and the machine
@@ -17,14 +17,16 @@ import * as QuickSettings from 'resource:///org/gnome/shell/ui/quickSettings.js'
 import {ModalDialog} from 'resource:///org/gnome/shell/ui/modalDialog.js';
 
 const HELPER_CANDIDATES = [
+    '/usr/bin/bootrelay',
+    '/usr/local/bin/bootrelay',
     '/usr/bin/boot-to-windows',
     '/usr/local/bin/boot-to-windows',
 ];
-const SYMBOLIC_ICON = 'hello-depression-symbolic';
-const ICON_FILE = 'icons/hello-depression-symbolic.svg';
+const SYMBOLIC_ICON = 'bootrelay-symbolic';
+const ICON_FILE = 'icons/bootrelay-symbolic.svg';
 const FALLBACK_ICON = 'system-reboot-symbolic';
 
-export default class HelloDepressionExtension extends Extension {
+export default class BootRelayExtension extends Extension {
     enable() {
         this._enabled = true;
         this._running = false;
@@ -74,7 +76,7 @@ export default class HelloDepressionExtension extends Extension {
             if (theme.has_icon(SYMBOLIC_ICON))
                 return {iconName: SYMBOLIC_ICON};
         } catch (e) {
-            console.debug(`hello-depression: icon theme lookup failed: ${e}`);
+            console.debug(`bootrelay: icon theme lookup failed: ${e}`);
         }
 
         try {
@@ -82,7 +84,7 @@ export default class HelloDepressionExtension extends Extension {
             if (Gio.File.new_for_path(iconPath).query_exists(null))
                 return {gicon: Gio.icon_new_for_string(iconPath)};
         } catch (e) {
-            console.debug(`hello-depression: could not load the bundled icon: ${e}`);
+            console.debug(`bootrelay: could not load the bundled icon: ${e}`);
         }
 
         return {iconName: FALLBACK_ICON};
@@ -118,7 +120,7 @@ export default class HelloDepressionExtension extends Extension {
         content.add_child(new St.Icon({
             ...this._icon,
             icon_size: 48,
-            style_class: 'hello-depression-dialog-icon',
+            style_class: 'bootrelay-dialog-icon',
         }));
 
         const title = new St.Label({
@@ -181,8 +183,8 @@ export default class HelloDepressionExtension extends Extension {
 
         if (!Gio.File.new_for_path(this._helperPath).query_exists(null)) {
             this._notifyError(
-                'No se encontró boot-to-windows. Instala el paquete ' +
-                'hello-depression o ejecuta install.sh.');
+                'No se encontró bootrelay. Instala el paquete ' +
+                'bootrelay o ejecuta install.sh.');
             return;
         }
 

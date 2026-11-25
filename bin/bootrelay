@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: MIT
 # Copyright (c) 2026 Raúl Arroyo (rarroy2)
 #
-# boot-to-windows - part of hello-depression
+# bootrelay - part of BootRelay
 #
 # Configures the next boot to Windows and, unless --no-reboot is given,
 # reboots immediately.
@@ -28,8 +28,8 @@ export LC_ALL=C
 export PATH=/usr/sbin:/usr/bin:/sbin:/bin
 umask 022
 
-readonly PROG_NAME='boot-to-windows'
-readonly VERSION='0.2.0'
+readonly PROG_NAME='bootrelay'
+readonly VERSION='0.3.0'
 readonly EFIVARS='/sys/firmware/efi/efivars'
 
 DRY_RUN=0
@@ -57,7 +57,7 @@ sayf() { (( QUIET )) || printf "$@"; }
 
 usage() {
     cat <<'EOF'
-Usage: boot-to-windows [OPTIONS]
+Usage: bootrelay [OPTIONS]
 
 Configure the next boot to Windows and reboot (default).
 
@@ -79,10 +79,10 @@ Exit codes:
   4 write/verify failure, 5 unsupported system, 6 efivarfs read-only
 
 Examples:
-  boot-to-windows --detect
-  sudo boot-to-windows --dry-run
-  sudo boot-to-windows --no-reboot
-  sudo boot-to-windows --entry=0005
+  bootrelay --detect
+  sudo bootrelay --dry-run
+  sudo bootrelay --no-reboot
+  sudo bootrelay --entry=0005
 EOF
 }
 

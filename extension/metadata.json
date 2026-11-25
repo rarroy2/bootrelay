@@ -1,7 +1,7 @@
 {
-    "uuid": "hello-depression@rarroy2.github.io",
-    "name": "Hello Depression",
-    "description": "Adds an 'Ir a Windows' button to Quick Settings that reboots straight into Windows on dual-boot systems. Because sometimes you have to.",
+    "uuid": "bootrelay@rarroy2.github.io",
+    "name": "BootRelay",
+    "description": "Adds an 'Ir a Windows' button to Quick Settings that reboots straight into Windows on dual-boot systems. Support for more operating systems is planned.",
     "shell-version": [
         "45",
         "46",
@@ -10,5 +10,5 @@
         "49",
         "50"
     ],
-    "url": "https://github.com/rarroy2/hello-depression"
+    "url": "https://github.com/rarroy2/bootrelay"
 }

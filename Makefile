@@ -1,9 +1,9 @@
-# hello-depression
+# bootrelay
 # Convenience targets for development and packaging.
 
 SHELL := /bin/bash
-EXT_UUID := hello-depression@rarroy2.github.io
-VERSION := 0.2.0
+EXT_UUID := bootrelay@rarroy2.github.io
+VERSION := 0.3.0
 RPMTOP := $(CURDIR)/dist/rpmbuild
 RPMDEF := --define "_topdir $(RPMTOP)"
 
@@ -12,7 +12,7 @@ RPMDEF := --define "_topdir $(RPMTOP)"
 all: check
 
 check:
-	bash -n bin/boot-to-windows
+	bash -n bin/bootrelay
 	bash -n install.sh
 	bash -n uninstall.sh
 	@if command -v node >/dev/null 2>&1; then \
@@ -24,14 +24,14 @@ check:
 		echo "node not found, skipping extension syntax check"; \
 	fi
 	@if command -v rpmspec >/dev/null 2>&1; then \
-		rpmspec -P packaging/hello-depression.spec >/dev/null; \
+		rpmspec -P packaging/bootrelay.spec >/dev/null; \
 	fi
-	./bin/boot-to-windows --version
-	./bin/boot-to-windows --help >/dev/null
+	./bin/bootrelay --version
+	./bin/bootrelay --help >/dev/null
 	@echo "checks passed"
 
 detect:
-	./bin/boot-to-windows --detect
+	./bin/bootrelay --detect
 
 install:
 	sudo ./install.sh
@@ -40,10 +40,10 @@ install-icon:
 	@test -d "$(HOME)/.local/share/gnome-shell/extensions/$(EXT_UUID)" || { \
 		echo "extension is not installed for this user"; exit 1; \
 	}
-	install -Dm0644 extension/icons/hello-depression-symbolic.svg \
-		"$(HOME)/.local/share/gnome-shell/extensions/$(EXT_UUID)/icons/hello-depression-symbolic.svg"
-	install -Dm0644 extension/icons/hello-depression-symbolic.svg \
-		"$(HOME)/.local/share/icons/hicolor/scalable/actions/hello-depression-symbolic.svg"
+	install -Dm0644 extension/icons/bootrelay-symbolic.svg \
+		"$(HOME)/.local/share/gnome-shell/extensions/$(EXT_UUID)/icons/bootrelay-symbolic.svg"
+	install -Dm0644 extension/icons/bootrelay-symbolic.svg \
+		"$(HOME)/.local/share/icons/hicolor/scalable/actions/bootrelay-symbolic.svg"
 	@if command -v gtk-update-icon-cache >/dev/null 2>&1; then \
 		gtk-update-icon-cache -f -t "$(HOME)/.local/share/icons/hicolor" >/dev/null 2>&1 || true; \
 	fi
@@ -64,15 +64,15 @@ pack:
 prepare-rpm:
 	@mkdir -p "$(RPMTOP)/SOURCES" "$(RPMTOP)/SPECS"
 	tar --exclude=./.git --exclude=./dist \
-		--transform 's,^\.,hello-depression-$(VERSION),' \
-		-czf "$(RPMTOP)/SOURCES/hello-depression-$(VERSION).tar.gz" .
-	cp packaging/hello-depression.spec "$(RPMTOP)/SPECS/"
+		--transform 's,^\.,bootrelay-$(VERSION),' \
+		-czf "$(RPMTOP)/SOURCES/bootrelay-$(VERSION).tar.gz" .
+	cp packaging/bootrelay.spec "$(RPMTOP)/SPECS/"
 
 srpm: prepare-rpm
-	rpmbuild -bs $(RPMDEF) "$(RPMTOP)/SPECS/hello-depression.spec"
+	rpmbuild -bs $(RPMDEF) "$(RPMTOP)/SPECS/bootrelay.spec"
 
 rpm: prepare-rpm
-	rpmbuild -ba $(RPMDEF) "$(RPMTOP)/SPECS/hello-depression.spec"
+	rpmbuild -ba $(RPMDEF) "$(RPMTOP)/SPECS/bootrelay.spec"
 	@echo "built:"
 	@find "$(RPMTOP)/RPMS" "$(RPMTOP)/SRPMS" -name '*.rpm' -print
 

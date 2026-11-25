@@ -1,21 +1,21 @@
 <p align="center">
-  <img src="assets/hello-depression-icon.svg" width="112" alt="Hello Depression icon">
+  <img src="assets/bootrelay-icon.svg" width="112" alt="BootRelay icon">
 </p>
 
-# Hello Depression
+# BootRelay
 
 > A GNOME Quick Settings button that reboots straight into Windows on a Fedora dual-boot machine.
 >
 > Because sometimes you have to go to Windows. And that's depressing.
 
-`hello-depression` adds an **“Ir a Windows”** toggle to the GNOME Quick Settings
+**BootRelay** adds an **“Ir a Windows”** toggle to the GNOME Quick Settings
 grid, next to Wi-Fi, Bluetooth and power. Clicking it asks for confirmation,
 configures the *next* boot to Windows, and reboots immediately — no GRUB menu,
 no arrow keys, no thinking before coffee.
 
 The project is split into three small, reusable pieces:
 
-1. a root-owned CLI (`boot-to-windows`) that detects Windows and writes the
+1. a root-owned CLI (`bootrelay`) that detects Windows and writes the
    one-shot boot selection,
 2. a GNOME Shell extension that exposes the button,
 3. an installer that wires everything together with a narrow polkit rule.
@@ -80,10 +80,10 @@ not use it.
 Install the RPM attached to the release:
 
 ```bash
-sudo dnf install ./hello-depression-0.2.0-1.fc44.noarch.rpm
+sudo dnf install ./bootrelay-0.3.0-1.fc44.noarch.rpm
 ```
 
-The package installs the helper at `/usr/bin/boot-to-windows`, the polkit rule in
+The package installs the helper at `/usr/bin/bootrelay`, the polkit rule in
 `/usr/share/polkit-1/rules.d/`, the extension in
 `/usr/share/gnome-shell/extensions/` and the icon in the system icon theme.
 
@@ -94,7 +94,7 @@ resolve dependencies.
 Log out and back in, then enable the extension if it is not already enabled:
 
 ```bash
-gnome-extensions enable hello-depression@rarroy2.github.io
+gnome-extensions enable bootrelay@rarroy2.github.io
 ```
 
 > If you previously installed with `install.sh`, run `sudo ./uninstall.sh` before
@@ -105,8 +105,8 @@ gnome-extensions enable hello-depression@rarroy2.github.io
 ### From source (installer)
 
 ```bash
-git clone https://github.com/rarroy2/hello-depression.git
-cd hello-depression
+git clone https://github.com/rarroy2/bootrelay.git
+cd bootrelay
 sudo ./install.sh
 ```
 
@@ -117,6 +117,23 @@ automatically after the relogin.
 
 After logging in, open Quick Settings (top-right corner) and you will see
 **Ir a Windows** in the toggle grid.
+
+### Migrating from hello-depression (0.2.x)
+
+The project was renamed to BootRelay in 0.3.0. The old name is kept only for
+migration and compatibility.
+
+- **RPM users:** install the `bootrelay` RPM. Its `Obsoletes` field removes the
+  old `hello-depression` package and its system files automatically.
+- **Manual installer users:** run the old `sudo ./uninstall.sh` before installing
+  BootRelay, or let the new installer clean the old `/usr/local` helper, rules
+  and icons.
+- After installing, log out and back in, disable or remove
+  `hello-depression@rarroy2.github.io`, and enable
+  `bootrelay@rarroy2.github.io`.
+
+`/usr/bin/boot-to-windows` remains as a deprecated symlink to
+`/usr/bin/bootrelay` in the RPM.
 
 ### Installer options
 
@@ -137,17 +154,17 @@ rule instead of duplicating it.
 ### Manual extension install
 
 ```bash
-gnome-extensions install --force dist/hello-depression@rarroy2.github.io.shell-extension.zip
-gnome-extensions enable hello-depression@rarroy2.github.io
+gnome-extensions install --force dist/bootrelay@rarroy2.github.io.shell-extension.zip
+gnome-extensions enable bootrelay@rarroy2.github.io
 ```
 
-You still need the helper in `/usr/bin/boot-to-windows` or
-`/usr/local/bin/boot-to-windows`; use the RPM or the installer for that.
+You still need the helper in `/usr/bin/bootrelay` or
+`/usr/local/bin/bootrelay`; use the RPM or the installer for that.
 
 ### Custom icon
 
 The button and the confirmation dialog use
-`extension/icons/hello-depression-symbolic.svg`. Replace it with your own SVG
+`extension/icons/bootrelay-symbolic.svg`. Replace it with your own SVG
 (monochrome or transparent background) and run:
 
 ```bash
@@ -184,12 +201,12 @@ Cancel with **Cancelar** or <kbd>Esc</kbd>.
 The helper can be used without the extension:
 
 ```bash
-boot-to-windows --detect          # show detected Windows entries (no root)
-boot-to-windows --list            # list all UEFI entries and GRUB Windows entries
-boot-to-windows --dry-run         # show what would be done (no writes)
-sudo boot-to-windows --no-reboot  # set the next boot, do not reboot
-sudo boot-to-windows --clear      # clear a pending one-shot selection
-sudo boot-to-windows              # set the next boot and reboot now
+bootrelay --detect          # show detected Windows entries (no root)
+bootrelay --list            # list all UEFI entries and GRUB Windows entries
+bootrelay --dry-run         # show what would be done (no writes)
+sudo bootrelay --no-reboot  # set the next boot, do not reboot
+sudo bootrelay --clear      # clear a pending one-shot selection
+sudo bootrelay              # set the next boot and reboot now
 ```
 
 | Flag | Description |
@@ -221,7 +238,7 @@ Exit codes:
 To undo a test without rebooting:
 
 ```bash
-sudo boot-to-windows --clear   # clears BootNext and GRUB next_entry
+sudo bootrelay --clear   # clears BootNext and GRUB next_entry
 # or manually:
 sudo rm -f /sys/firmware/efi/efivars/BootNext-8be4df61-93ca-11d2-aa0d-00e098032b8c
 sudo grub2-editenv - unset next_entry
@@ -234,7 +251,7 @@ sudo grub2-editenv - unset next_entry
 ```text
 Quick Settings toggle ("Ir a Windows")
   └─ confirmation dialog
-       └─ sudo -n boot-to-windows --reboot --quiet
+       └─ sudo -n bootrelay --reboot --quiet
             │   (falls back to pkexec when sudo is not authorized)
             ├─ efibootmgr -n 0005        (UEFI: one-shot BootNext)
             │    └─ verify BootNext == 0005
@@ -296,14 +313,16 @@ Writing `BootNext` requires root. The extension looks for the helper in
 ### Default: polkit rule
 
 The RPM installs the rule in `/usr/share/polkit-1/rules.d/`; the manual installer
-uses `/etc/polkit-1/rules.d/`. Both allow the two supported helper paths:
+uses `/etc/polkit-1/rules.d/`. Both allow the new helper paths and the deprecated compatibility paths:
 
 ```js
 polkit.addRule(function (action, subject) {
     if (action.id !== 'org.freedesktop.policykit.exec')
         return null;
     var program = action.lookup('program');
-    if (program !== '/usr/bin/boot-to-windows' &&
+    if (program !== '/usr/bin/bootrelay' &&
+        program !== '/usr/local/bin/bootrelay' &&
+        program !== '/usr/bin/boot-to-windows' &&
         program !== '/usr/local/bin/boot-to-windows')
         return null;
     if (!subject.local || !subject.active)
@@ -314,16 +333,16 @@ polkit.addRule(function (action, subject) {
 });
 ```
 
-Scope: one exact binary, local active sessions, `wheel` members only. If the rule
+Scope: a narrow set of exact helper paths, local active sessions, `wheel` members only. If the rule
 is removed, `pkexec` falls back to asking for a password instead of breaking.
 
 ### Alternative: sudoers
 
 ```sudoers
-%wheel ALL=(root) NOPASSWD: /usr/bin/boot-to-windows, /usr/local/bin/boot-to-windows
+%wheel ALL=(root) NOPASSWD: /usr/bin/bootrelay, /usr/local/bin/bootrelay, /usr/bin/boot-to-windows, /usr/local/bin/boot-to-windows
 ```
 
-Installed as `/etc/sudoers.d/hello-depression` (`0440`) after validation with
+Installed as `/etc/sudoers.d/bootrelay` (`0440`) after validation with
 `visudo -cf`. The extension tries `sudo -n` first and falls back to `pkexec`, so
 either privilege mode works without extra configuration.
 
@@ -344,7 +363,7 @@ password.
 With the RPM:
 
 ```bash
-sudo dnf remove hello-depression
+sudo dnf remove bootrelay
 ```
 
 With the manual installer:
@@ -368,10 +387,10 @@ Log out and back in to remove the button from the running session.
 | No button appears | Log out and back in. Check `gnome-extensions list` and `journalctl -f -o cat /usr/bin/gnome-shell`. |
 | Button appears without an icon | Run `make install-icon`. Keep XML comments out of the SVG; validate it with `gdk-pixbuf`. |
 | `pkexec` still asks for a password | Rule not installed, or your user is not in `wheel` (`id`). Re-run `sudo ./install.sh`. |
-| `dnf install ./hello-depression-*.rpm` cannot resolve `efibootmgr` or `polkit` | Enable the Fedora repositories and retry. If you used `rpm -i`, use `dnf install ./hello-depression-*.rpm` instead; plain RPM does not resolve dependencies. |
+| `dnf install ./bootrelay-*.rpm` cannot resolve `efibootmgr` or `polkit` | Enable the Fedora repositories and retry. If you used `rpm -i`, use `dnf install ./bootrelay-*.rpm` instead; plain RPM does not resolve dependencies. |
 | GRUB fallback says `grub2-reboot` was not found | Install `grub2-tools`, or use the UEFI method. It is only a weak dependency. |
 | “No Windows boot entry was detected” | Boot Windows once so firmware creates the entry, check `efibootmgr -v`, or force the entry with `--entry=XXXX`. |
-| `BootNext` is written but the machine boots Linux | Firmware ignores `BootNext`. Use `sudo boot-to-windows --method=grub`, or set the boot order in the firmware setup. |
+| `BootNext` is written but the machine boots Linux | Firmware ignores `BootNext`. Use `sudo bootrelay --method=grub`, or set the boot order in the firmware setup. |
 | `EFI variables are read-only` | `sudo mount -o remount,rw /sys/firmware/efi/efivars` (some firmware exposes them read-only). |
 | `GRUB_DEFAULT is '0' but ... requires saved` | Set `GRUB_DEFAULT=saved` in `/etc/default/grub` and regenerate the config. |
 | Windows entry missing from GRUB | Fedora disables `os-prober`; this is expected. The UEFI path does not need GRUB. |
@@ -381,12 +400,12 @@ Log out and back in to remove the button from the running session.
 ### Useful diagnostics
 
 ```bash
-boot-to-windows --detect
-boot-to-windows --list
-sudo boot-to-windows --dry-run
+bootrelay --detect
+bootrelay --list
+sudo bootrelay --dry-run
 efibootmgr -v
-sudo boot-to-windows --clear
-journalctl -t boot-to-windows --since today
+sudo bootrelay --clear
+journalctl -t bootrelay --since today
 ```
 
 ---
@@ -430,18 +449,18 @@ The extension targets the GNOME 45+ ESM APIs:
 
 Tested end-to-end (install → click → reboot into Windows → return to Fedora)
 on Fedora 44, GNOME Shell 50.6, Wayland, UEFI, both with the source installer
-and with the `hello-depression` RPM.
+and with the `bootrelay` RPM.
 
 Project layout:
 
 ```text
-bin/boot-to-windows                    privileged helper
+bin/bootrelay                          privileged helper
 extension/{metadata.json,extension.js} GNOME Shell extension
 extension/icons/                       original segmented restart icon
 assets/                                README icon/badge
-packaging/hello-depression.spec        RPM spec
-polkit/49-hello-depression.rules       default passwordless rule
-sudoers/hello-depression               alternative rule
+packaging/bootrelay.spec               RPM spec
+polkit/49-bootrelay.rules              default passwordless rule
+sudoers/bootrelay                      alternative rule
 install.sh, uninstall.sh               installer and remover
 Makefile                               check, detect, pack, rpm, clean
 ```

@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: MIT
 # Copyright (c) 2026 Raúl Arroyo (rarroy2)
 #
-# hello-depression uninstaller
+# bootrelay uninstaller
 #
 # Removes the extension, the helper and the privilege rule. It does not touch
 # boot entries, BootOrder, GRUB or any Windows installation.
@@ -19,10 +19,10 @@ export LC_ALL=C
 export PATH=/usr/sbin:/usr/bin:/sbin:/bin
 umask 022
 
-readonly EXT_UUID='hello-depression@rarroy2.github.io'
-readonly HELPER_DST='/usr/local/bin/boot-to-windows'
-readonly POLKIT_DST='/etc/polkit-1/rules.d/49-hello-depression.rules'
-readonly SUDOERS_DST='/etc/sudoers.d/hello-depression'
+readonly EXT_UUID='bootrelay@rarroy2.github.io'
+readonly HELPER_DST='/usr/local/bin/bootrelay'
+readonly POLKIT_DST='/etc/polkit-1/rules.d/49-bootrelay.rules'
+readonly SUDOERS_DST='/etc/sudoers.d/bootrelay'
 
 SCRIPT_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)
 readonly SCRIPT_DIR
@@ -70,7 +70,7 @@ run_as_user() {
 
 # Remove a UUID from a list-valued dconf key, preserving the other entries.
 gsettings_remove_uuid() {
-    local key=$1 current inner result='' sep='' item
+    local key=$1 uuid=${2:-$EXT_UUID} current inner result='' sep='' item
     local -a items=()
 
     if ! current=$(run_as_user env "${SESSION_ENV[@]}" \
@@ -95,7 +95,7 @@ gsettings_remove_uuid() {
         item=${item#\'}
         item=${item%\'}
 
-        if [[ -z $item || $item == "$EXT_UUID" ]]; then
+        if [[ -z $item || $item == "$uuid" ]]; then
             continue
         fi
 
@@ -162,10 +162,14 @@ SESSION_ENV=(
     DBUS_SESSION_BUS_ADDRESS="unix:path=/run/user/$TARGET_UID/bus"
 )
 EXT_DIR="$TARGET_HOME/.local/share/gnome-shell/extensions/$EXT_UUID"
-HICOLOR_ICON="$TARGET_HOME/.local/share/icons/hicolor/scalable/actions/hello-depression-symbolic.svg"
-LEGACY_HICOLOR_ICON="$TARGET_HOME/.local/share/icons/hicolor/scalable/actions/boot-to-windows-symbolic.svg"
+HICOLOR_ICON="$TARGET_HOME/.local/share/icons/hicolor/scalable/actions/bootrelay-symbolic.svg"
+LEGACY_HICOLOR_ICONS=(
+    "$TARGET_HOME/.local/share/icons/hicolor/scalable/actions/hello-depression-symbolic.svg"
+    "$TARGET_HOME/.local/share/icons/hicolor/scalable/actions/boot-to-windows-symbolic.svg"
+)
+OLD_EXT_DIR="$TARGET_HOME/.local/share/gnome-shell/extensions/hello-depression@rarroy2.github.io"
 
-say "Removing hello-depression for user: $TARGET_USER"
+say "Removing bootrelay for user: $TARGET_USER"
 
 # Disable first so GNOME Shell does not keep a reference to a deleted extension.
 if command -v gnome-extensions >/dev/null 2>&1 && [[ -S /run/user/$TARGET_UID/bus ]]; then
@@ -178,6 +182,10 @@ if command -v gnome-extensions >/dev/null 2>&1 && [[ -S /run/user/$TARGET_UID/bu
             warn 'could not update the enabled-extensions list'
         gsettings_remove_uuid disabled-extensions ||
             warn 'could not update the disabled-extensions list'
+        gsettings_remove_uuid enabled-extensions 'hello-depression@rarroy2.github.io' ||
+            warn 'could not update the old enabled-extensions list'
+        gsettings_remove_uuid disabled-extensions 'hello-depression@rarroy2.github.io' ||
+            warn 'could not update the old disabled-extensions list'
     fi
 fi
 
@@ -185,12 +193,25 @@ if [[ -d $EXT_DIR ]]; then
     run rm -rf "$EXT_DIR"
 fi
 
-if [[ -f $HICOLOR_ICON || -f $LEGACY_HICOLOR_ICON ]]; then
-    ICON_EXISTS=1
-    run rm -f "$HICOLOR_ICON" "$LEGACY_HICOLOR_ICON"
-else
-    ICON_EXISTS=0
+ICON_EXISTS=0
+for icon in "$HICOLOR_ICON" "${LEGACY_HICOLOR_ICONS[@]}"; do
+    if [[ -f $icon ]]; then
+        ICON_EXISTS=1
+        run rm -f "$icon"
+    fi
+done
+
+if [[ -d $OLD_EXT_DIR ]]; then
+    run rm -rf "$OLD_EXT_DIR"
 fi
+
+for old in /usr/local/bin/boot-to-windows \
+    /etc/polkit-1/rules.d/49-hello-depression.rules \
+    /etc/sudoers.d/hello-depression; do
+    if [[ -e $old ]]; then
+        run rm -f "$old"
+    fi
+done
 
 if [[ -f $HELPER_DST ]]; then
     run rm -f "$HELPER_DST"

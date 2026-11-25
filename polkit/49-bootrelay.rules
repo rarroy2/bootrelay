@@ -1,12 +1,12 @@
 // SPDX-License-Identifier: MIT
 // Copyright (c) 2026 Raúl Arroyo (rarroy2)
 //
-// Allow members of the "wheel" group to run the hello-depression helper as
-// root without a password prompt, but ONLY that exact program. The helper
-// itself validates its arguments and does not execute arbitrary commands.
+// Allow members of the "wheel" group to run the BootRelay helper as root
+// without a password prompt, but ONLY the bootrelay program. The helper itself
+// validates its arguments and does not execute arbitrary commands.
 //
-// Manual installer: /etc/polkit-1/rules.d/49-hello-depression.rules
-// RPM package:      /usr/share/polkit-1/rules.d/49-hello-depression.rules
+// Manual installer: /etc/polkit-1/rules.d/49-bootrelay.rules
+// RPM package:      /usr/share/polkit-1/rules.d/49-bootrelay.rules
 // Owner: root:root, mode 0644.
 
 polkit.addRule(function (action, subject) {
@@ -14,7 +14,9 @@ polkit.addRule(function (action, subject) {
         return null;
 
     var program = action.lookup('program');
-    if (program !== '/usr/bin/boot-to-windows' &&
+    if (program !== '/usr/bin/bootrelay' &&
+        program !== '/usr/local/bin/bootrelay' &&
+        program !== '/usr/bin/boot-to-windows' &&
         program !== '/usr/local/bin/boot-to-windows')
         return null;
 

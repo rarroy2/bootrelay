@@ -2,9 +2,9 @@
 # SPDX-License-Identifier: MIT
 # Copyright (c) 2026 Raúl Arroyo (rarroy2)
 #
-# hello-depression installer
+# bootrelay installer
 #
-# Installs the boot-to-windows helper, the GNOME Shell extension and (by
+# Installs the bootrelay helper, the GNOME Shell extension and (by
 # default) a narrowly scoped polkit rule so the Quick Settings button can
 # reboot into Windows without a password prompt.
 #
@@ -24,18 +24,18 @@ export LC_ALL=C
 export PATH=/usr/sbin:/usr/bin:/sbin:/bin
 umask 022
 
-readonly EXT_UUID='hello-depression@rarroy2.github.io'
-readonly HELPER_DST='/usr/local/bin/boot-to-windows'
-readonly POLKIT_DST='/etc/polkit-1/rules.d/49-hello-depression.rules'
-readonly SUDOERS_DST='/etc/sudoers.d/hello-depression'
+readonly EXT_UUID='bootrelay@rarroy2.github.io'
+readonly HELPER_DST='/usr/local/bin/bootrelay'
+readonly POLKIT_DST='/etc/polkit-1/rules.d/49-bootrelay.rules'
+readonly SUDOERS_DST='/etc/sudoers.d/bootrelay'
 
 SCRIPT_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)
 readonly SCRIPT_DIR
-readonly HELPER_SRC="$SCRIPT_DIR/bin/boot-to-windows"
-readonly POLKIT_SRC="$SCRIPT_DIR/polkit/49-hello-depression.rules"
-readonly SUDOERS_SRC="$SCRIPT_DIR/sudoers/hello-depression"
+readonly HELPER_SRC="$SCRIPT_DIR/bin/bootrelay"
+readonly POLKIT_SRC="$SCRIPT_DIR/polkit/49-bootrelay.rules"
+readonly SUDOERS_SRC="$SCRIPT_DIR/sudoers/bootrelay"
 readonly EXT_SRC="$SCRIPT_DIR/extension"
-readonly ICON_SRC="$EXT_SRC/icons/hello-depression-symbolic.svg"
+readonly ICON_SRC="$EXT_SRC/icons/bootrelay-symbolic.svg"
 
 PASSWORDLESS='polkit'
 DO_ENABLE=1
@@ -278,6 +278,9 @@ say "Privilege mode: $PASSWORDLESS"
 # 1. Helper
 run install -o root -g root -m 0755 "$HELPER_SRC" "$HELPER_DST"
 
+# Deprecated compatibility name for the 0.2.x release.
+run ln -sfn "$HELPER_DST" /usr/local/bin/boot-to-windows
+
 # 2. Privilege rule
 case "$PASSWORDLESS" in
     polkit)
@@ -333,13 +336,21 @@ run install -o "$TARGET_USER" -g "$TARGET_GROUP" -m 0644 \
 run install -o "$TARGET_USER" -g "$TARGET_GROUP" -m 0644 \
     "$EXT_SRC/extension.js" "$EXT_DIR/extension.js"
 run install -o "$TARGET_USER" -g "$TARGET_GROUP" -m 0644 \
-    "$ICON_SRC" "$EXT_DIR/icons/hello-depression-symbolic.svg"
+    "$ICON_SRC" "$EXT_DIR/icons/bootrelay-symbolic.svg"
 run install -o "$TARGET_USER" -g "$TARGET_GROUP" -m 0644 \
-    "$ICON_SRC" "$HICOLOR_DIR/hello-depression-symbolic.svg"
+    "$ICON_SRC" "$HICOLOR_DIR/bootrelay-symbolic.svg"
 
-# Clean up the icon names used by 0.1.x.
+# Clean up names from 0.1.x, 0.2.x and the old project name.
 run rm -f "$EXT_DIR/icons/boot-to-windows-symbolic.svg" \
-    "$HICOLOR_DIR/boot-to-windows-symbolic.svg"
+    "$EXT_DIR/icons/hello-depression-symbolic.svg" \
+    "$HICOLOR_DIR/boot-to-windows-symbolic.svg" \
+    "$HICOLOR_DIR/hello-depression-symbolic.svg"
+run rm -f /etc/polkit-1/rules.d/49-hello-depression.rules \
+    /etc/sudoers.d/hello-depression
+OLD_EXT_DIR="$TARGET_HOME/.local/share/gnome-shell/extensions/hello-depression@rarroy2.github.io"
+if [[ -d $OLD_EXT_DIR ]]; then
+    run rm -rf "$OLD_EXT_DIR"
+fi
 
 if command -v gtk-update-icon-cache >/dev/null 2>&1 &&
     [[ -f "$TARGET_HOME/.local/share/icons/hicolor/index.theme" ]]; then
@@ -393,6 +404,6 @@ say 'Next steps:'
 say '  1. Log out and back in. On Wayland a new session is required to load'
 say '     the extension for the first time.'
 say '  2. Open Quick Settings and click "Ir a Windows".'
-say '  3. To diagnose detection: boot-to-windows --list'
+say '  3. To diagnose detection: bootrelay --list'
 say ''
 say 'Warning: the button reboots immediately after confirmation. Save your work.'
