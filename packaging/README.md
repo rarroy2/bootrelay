@@ -28,6 +28,9 @@ generated from the working tree, excluding `.git` and `dist`.
 sudo dnf install ./dist/rpmbuild/RPMS/noarch/hello-depression-0.2.0-1.fc44.noarch.rpm
 ```
 
+`dnf` installs missing hard dependencies (`efibootmgr`, `polkit`, `gnome-shell`)
+automatically. Do not use `rpm -i`; plain RPM does not resolve dependencies.
+
 Then log out and back in, and enable the extension if needed:
 
 ```bash

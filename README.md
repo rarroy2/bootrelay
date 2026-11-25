@@ -56,14 +56,20 @@ the firmware's one-shot `BootNext` variable (or GRUB's `next_entry`) is changed.
 | Desktop | GNOME Shell 45–50 (tested on 50.6), Wayland or X11 |
 | Boot | UEFI recommended; BIOS + GRUB works through the fallback |
 | Windows | A UEFI `Windows Boot Manager` entry, or a Windows entry in `grub.cfg` |
-| Packages | `efibootmgr`, `polkit` (`pkexec`), `gnome-shell`, `gnome-extensions` |
-| GRUB fallback | `grub2-reboot`, `grub2-editenv`, `GRUB_DEFAULT=saved` |
+| Packages | Hard dependencies: `efibootmgr`, `polkit` (`pkexec`), `gnome-shell`. `gnome-extensions` is part of `gnome-shell`. |
+| GRUB fallback | `grub2-tools` (`grub2-reboot`, `grub2-editenv`), `GRUB_DEFAULT=saved` |
 
-Install the dependencies on Fedora with:
+With the RPM, `dnf` resolves and installs missing hard dependencies from the
+enabled Fedora repositories. You do not need to install them separately. The
+manual command below is only for the source installer (or an offline setup):
 
 ```bash
 sudo dnf install efibootmgr polkit
 ```
+
+`grub2-tools` is a weak dependency (`Recommends`): `dnf` installs it by default
+when available, but it is only needed for the GRUB fallback. The UEFI path does
+not use it.
 
 ---
 
@@ -80,6 +86,10 @@ sudo dnf install ./hello-depression-0.2.0-1.fc44.noarch.rpm
 The package installs the helper at `/usr/bin/boot-to-windows`, the polkit rule in
 `/usr/share/polkit-1/rules.d/`, the extension in
 `/usr/share/gnome-shell/extensions/` and the icon in the system icon theme.
+
+`dnf` installs missing hard dependencies (`efibootmgr`, `polkit`, `gnome-shell`)
+automatically. Do not install this package with `rpm -i`: plain RPM does not
+resolve dependencies.
 
 Log out and back in, then enable the extension if it is not already enabled:
 
@@ -358,6 +368,8 @@ Log out and back in to remove the button from the running session.
 | No button appears | Log out and back in. Check `gnome-extensions list` and `journalctl -f -o cat /usr/bin/gnome-shell`. |
 | Button appears without an icon | Run `make install-icon`. Keep XML comments out of the SVG; validate it with `gdk-pixbuf`. |
 | `pkexec` still asks for a password | Rule not installed, or your user is not in `wheel` (`id`). Re-run `sudo ./install.sh`. |
+| `dnf install ./hello-depression-*.rpm` cannot resolve `efibootmgr` or `polkit` | Enable the Fedora repositories and retry. If you used `rpm -i`, use `dnf install ./hello-depression-*.rpm` instead; plain RPM does not resolve dependencies. |
+| GRUB fallback says `grub2-reboot` was not found | Install `grub2-tools`, or use the UEFI method. It is only a weak dependency. |
 | “No Windows boot entry was detected” | Boot Windows once so firmware creates the entry, check `efibootmgr -v`, or force the entry with `--entry=XXXX`. |
 | `BootNext` is written but the machine boots Linux | Firmware ignores `BootNext`. Use `sudo boot-to-windows --method=grub`, or set the boot order in the firmware setup. |
 | `EFI variables are read-only` | `sudo mount -o remount,rw /sys/firmware/efi/efivars` (some firmware exposes them read-only). |
