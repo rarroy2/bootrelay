@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="560" height="34" viewBox="0 0 560 34" role="img" aria-label="Languages: Shell 80.5%, JavaScript 14.8%, Makefile 4.7%">
+  <title>Languages: Shell 80.5%, JavaScript 14.8%, Makefile 4.7%</title>
+  <defs>
+    <clipPath id="bar">
+      <rect x="0" y="0" width="560" height="8" rx="4"/>
+    </clipPath>
+  </defs>
+  <g clip-path="url(#bar)">
+    <rect x="0.00" y="0" width="450.80" height="8" fill="#89e051"/>
+    <rect x="450.80" y="0" width="82.88" height="8" fill="#f1e05a"/>
+    <rect x="533.68" y="0" width="26.32" height="8" fill="#427819"/>
+  </g>
+  <circle cx="12" cy="22" r="3" fill="#89e051"/>
+  <text x="21" y="26" fill="#8b949e" font-family="sans-serif" font-size="12">Shell 80.5%</text>
+  <circle cx="140" cy="22" r="3" fill="#f1e05a"/>
+  <text x="149" y="26" fill="#8b949e" font-family="sans-serif" font-size="12">JavaScript 14.8%</text>
+  <circle cx="300" cy="22" r="3" fill="#427819"/>
+  <text x="309" y="26" fill="#8b949e" font-family="sans-serif" font-size="12">Makefile 4.7%</text>
+</svg>
