@@ -55,7 +55,7 @@ fi
 
 %files
 %license LICENSE
-%doc README.md
+%doc README.md docs assets
 %{_bindir}/bootrelay
 %{_bindir}/boot-to-windows
 %{_datadir}/polkit-1/rules.d/49-bootrelay.rules
